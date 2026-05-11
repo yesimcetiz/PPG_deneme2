@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ppguser
+      POSTGRES_PASSWORD: ppgpass
+      POSTGRES_DB: ppgdb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ppguser -d ppgdb" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://ppguser:ppgpass@db:5432/ppgdb
+      SECRET_KEY: change_this_in_production_please_min32chars
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      ADMIN_EMAILS: "ezgi@antigravity.com,sen@antigravity.com"
+    volumes:
+      - ./backend:/app
+      - ./ml_models:/app/../ml_models # eğitilmiş model dosyaları
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  pgdata:

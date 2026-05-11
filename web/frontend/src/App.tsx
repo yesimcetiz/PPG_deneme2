@@ -1,13 +1,14 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
-import Layout from './components/layout/Layout'
-import Login from './pages/auth/Login'
-import Register from './pages/auth/Register'
-import Dashboard from './pages/user/Dashboard'
-import Profile from './pages/user/Profile'
-import History from './pages/user/History'
-import AdminDashboard from './pages/admin/AdminDashboard'
 
-const Chat = () => <div style={{color:'#fff', fontSize:'24px', fontWeight:800}}>AI Asistan 💬</div>
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import Layout from './components/layout/Layout';
+import Login from './pages/auth/Login';
+import Register from './pages/auth/Register';
+import Dashboard from './pages/user/Dashboard';
+import Profile from './pages/user/Profile';
+import History from './pages/user/History';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import Chat from './pages/user/Chat';
 
 export default function App() {
   return (

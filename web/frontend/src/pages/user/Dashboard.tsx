@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Activity, Heart, Clock, TrendingUp, Bell, Wifi } from 'lucide-react'
+import { Heart, Clock, TrendingUp, Bell, Wifi, X, Send, Bot } from 'lucide-react'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Area, AreaChart
 } from 'recharts'
 
@@ -15,7 +15,29 @@ const generateData = () =>
 export default function Dashboard() {
   const [stressScore, setStressScore] = useState(78)
   const [data, setData] = useState(generateData())
-  const [sensorConnected, setSensorConnected] = useState(true)
+  const [sensorConnected] = useState(true)
+  
+  // AI Asistan için stateler
+  const [isChatOpen, setIsChatOpen] = useState(false)
+  const [selectedModel, setSelectedModel] = useState('gemini-1.5-pro')
+  const [prompt, setPrompt] = useState('')
+
+  // Mesaj geçmişi ve yükleniyor durumu
+  const [messages, setMessages] = useState([
+    { 
+      role: 'assistant', 
+      content: 'Merhaba Yeşim! Ben sağlık asistanınızım. Sisteme bağlı sensör verilerinizi inceleyebilir ve size özel önerilerde bulunabilirim. Bugün nasıl hissediyorsunuz?' 
+    },
+    { 
+      role: 'user', 
+      content: 'Şu anki stres durumum ve verilerim ne alemde? Ne önerirsin?' 
+    },
+    { 
+      role: 'assistant', 
+      content: 'Hemen anlık verilerinizi analiz ediyorum...\n\n📊 **Güncel Durumunuz:**\n• Stres Skorunuz: %78 (Yüksek)\n• Kalp Atışınız: 87 bpm\n• HRV: 42 ms\n\n💡 **Analiz:** HRV değerinizin düşük ve kalp atışınızın normalin biraz üzerinde olması, sisteminizin şu an "savaş veya kaç" modunda olduğunu (sempatik sinir sistemi aktivasyonu) gösteriyor. \n\n🧘‍♀️ **Önerilerim:**\n1. Lütfen işinize 5 dakika ara verin.\n2. Kalp ritminizi pürüzsüzleştirmek için "4-7-8 nefes egzersizi" yapın (4sn nefes al, 7sn tut, 8sn ver).\n3. Bugün su tüketiminiz az görünüyorsa bir bardak su için.\n\nEgzersiz konusunda sizi sesli veya görsel olarak yönlendirmemi ister misiniz?' 
+    }
+  ])
+  const [isLoading, setIsLoading] = useState(false)
 
   // Fake anlık güncelleme (WebSocket gelince değişecek)
   useEffect(() => {
@@ -38,8 +60,29 @@ export default function Dashboard() {
     return 'Düşük ✓'
   }
 
+  // Mesaj Gönderme Fonksiyonu
+  const handleSendMessage = () => {
+    if (!prompt.trim()) return;
+    
+    const userMessage = prompt;
+    setPrompt(''); // Inputu temizle
+    
+    // 1. Kullanıcının mesajını ekrana ekle
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setIsLoading(true); // "Yazıyor..." animasyonunu başlat
+
+    // 2. Şimdilik FastAPI'ye bağlı olmadığı için sahte bir gecikme ve cevap ekliyoruz
+    setTimeout(() => {
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: `Şu an model bağlantısı kurulmadığı için simüle edilmiş bir cevap görüyorsun. Bana "${userMessage}" dedin. Model olarak ${selectedModel} seçili.` 
+      }]);
+      setIsLoading(false);
+    }, 1500);
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', position: 'relative' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -93,7 +136,6 @@ export default function Dashboard() {
           <div style={{ fontSize: '48px', fontWeight: 900, color: getStressColor(stressScore), marginBottom: '12px' }}>
             %{stressScore}
           </div>
-          {/* Progress Bar */}
           <div style={{ height: '6px', background: '#252d4a', borderRadius: '3px', overflow: 'hidden' }}>
             <div style={{
               height: '100%', width: `${stressScore}%`,
@@ -242,9 +284,9 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* AI Asistan Butonu */}
+          {/* AI Asistan Butonu - Tıklanınca Modalı Açar */}
           <button
-            onClick={() => window.location.href = '/chat'}
+            onClick={() => setIsChatOpen(true)}
             style={{
               width: '100%', marginTop: '20px', padding: '12px',
               background: 'linear-gradient(135deg, #6c3fd6, #3b6fd4)',
@@ -290,6 +332,130 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      {/* --- AI ASİSTAN MODALI --- */}
+      {isChatOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(4px)',
+          display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            width: '100%', maxWidth: '600px', height: '600px',
+            background: 'linear-gradient(135deg, #1e2540, #131629)',
+            border: '1px solid #252d4a', borderRadius: '24px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden'
+          }}>
+            
+            {/* Modal Header & Model Seçici */}
+            <div style={{
+              padding: '20px', borderBottom: '1px solid #252d4a',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Bot size={24} color="#6c3fd6" />
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#fff', margin: 0 }}>SAĞLIK ASİSTANI</h2>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.05)', color: '#fff',
+                    border: '1px solid #252d4a', borderRadius: '8px',
+                    padding: '8px 12px', fontSize: '13px', fontWeight: 600,
+                    outline: 'none', cursor: 'pointer'
+                  }}
+                >
+                  <option value="gemini-1.5-pro" style={{ background: '#1e2540' }}>Gemini 1.5 Pro</option>
+                  <option value="gpt-4o" style={{ background: '#1e2540' }}>GPT-4 Omni</option>
+                  <option value="med-llama" style={{ background: '#1e2540' }}>Med-Llama 3</option>
+                </select>
+                
+                <button onClick={() => setIsChatOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                  <X size={24} color="#94a3b8" />
+                </button>
+              </div>
+            </div>
+
+            {/* Mesajlaşma Alanı (Geçmiş) */}
+            <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', marginBottom: '10px' }}>
+                Şu an <strong style={{ color: '#00d4ff' }}>{selectedModel}</strong> modeli seçili.
+              </div>
+
+              {/* Mesajları Listele */}
+              {messages.map((msg, index) => (
+                <div key={index} style={{
+                  display: 'flex', 
+                  justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start'
+                }}>
+                  <div style={{
+                    maxWidth: '80%', padding: '12px 16px',
+                    background: msg.role === 'user' ? 'linear-gradient(135deg, #6c3fd6, #3b6fd4)' : 'rgba(255,255,255,0.05)',
+                    border: msg.role === 'user' ? 'none' : '1px solid #252d4a',
+                    color: '#fff', fontSize: '14px', lineHeight: '1.5',
+                    whiteSpace: 'pre-wrap', // Satır atlamaları düzeltildi
+                    borderRadius: '16px',
+                    borderBottomRightRadius: msg.role === 'user' ? '4px' : '16px',
+                    borderBottomLeftRadius: msg.role === 'assistant' ? '4px' : '16px',
+                  }}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+
+              {/* AI Cevap Beklerken Çıkan "Yazıyor..." Efekti */}
+              {isLoading && (
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  <div style={{
+                    background: 'rgba(255,255,255,0.05)', border: '1px solid #252d4a',
+                    padding: '12px 16px', borderRadius: '16px', borderBottomLeftRadius: '4px',
+                    color: '#94a3b8', fontSize: '13px', fontStyle: 'italic'
+                  }}>
+                    Asistan yazıyor...
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Mesaj Gönderme Inputu */}
+            <div style={{ padding: '20px', borderTop: '1px solid #252d4a', background: 'rgba(0,0,0,0.2)' }}>
+              <div style={{
+                display: 'flex', gap: '12px', background: 'rgba(255,255,255,0.05)',
+                border: '1px solid #252d4a', borderRadius: '16px', padding: '8px'
+              }}>
+                <input
+                  type="text"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Stres seviyem neden yüksek olabilir?"
+                  style={{
+                    flex: 1, background: 'transparent', border: 'none',
+                    color: '#fff', fontSize: '14px', padding: '8px 12px', outline: 'none'
+                  }}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  style={{
+                    background: 'linear-gradient(135deg, #6c3fd6, #3b6fd4)',
+                    border: 'none', borderRadius: '12px', padding: '0 16px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', transition: 'all 0.2s'
+                  }}
+                >
+                  <Send size={18} color="#fff" />
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
