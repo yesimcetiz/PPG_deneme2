@@ -95,7 +95,7 @@ def get_my_results(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Kullanıcının geçmiş PPG sonuçları."""
+    """Kullanıcının geçmiş PPG sonuçları (ham format)."""
     return (
         db.query(PPGResult)
         .filter(PPGResult.user_id == current_user.id)
@@ -103,3 +103,33 @@ def get_my_results(
         .limit(limit)
         .all()
     )
+
+
+@router.get("/history")
+def get_my_history(
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Kullanıcının geçmiş PPG sonuçları — mobil PpgSessionSummary formatında.
+    BUG-006 + BUG-008 fix: alan adları mobil ile eşleştirildi.
+    """
+    results = (
+        db.query(PPGResult)
+        .filter(PPGResult.user_id == current_user.id)
+        .order_by(PPGResult.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "session_id": str(r.id),
+            "heart_rate": round(r.mean_hr or 0, 1),
+            "hrv_rmssd":  round(r.rmssd or 0, 1),
+            "stress_level": "high" if r.y_pred_smooth == 1 else "relaxed",
+            "stress_score": round(r.p_stress * 100),
+            "analyzed_at": r.created_at.isoformat(),
+        }
+        for r in results
+    ]

@@ -1,22 +1,25 @@
 import React, { useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  View, Text, StyleSheet, SafeAreaView,
+  View, Text, StyleSheet,
   ScrollView, TouchableOpacity,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { AuthStackParamList } from '../../navigation/AuthNavigator';
+import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
 import AuthHeader from '../../components/ui/AuthHeader';
 import GradientButton from '../../components/ui/GradientButton';
 import { profileApi } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
 import { Colors, FontSize, Spacing, Radius } from '../../constants/theme';
 
-type Props = NativeStackScreenProps<AuthStackParamList, 'Onboarding3'>;
+type Props = NativeStackScreenProps<OnboardingStackParamList, 'Onboarding3'>;
 
 const STRESS_SOURCES = ['İş', 'Okul', 'Aile', 'İlişki', 'Sağlık', 'Diğer'];
 const LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-export default function OnboardingStep3Screen({ navigation, route }: Props) {
+export default function OnboardingStep3Screen({ route }: Props) {
   const { step1, step2 } = route.params;
+  const completeOnboarding = useAuthStore((s) => s.completeOnboarding);
 
   const [sources, setSources] = useState<string[]>([]);
   const [level, setLevel] = useState(5);
@@ -38,11 +41,12 @@ export default function OnboardingStep3Screen({ navigation, route }: Props) {
         avg_stress_level: level,
       });
     } catch {
-      // Profil güncelleme başarısız olsa da ana ekrana geç
+      // Profil güncelleme başarısız olsa bile onboarding tamamlandı say
     } finally {
       setLoading(false);
     }
-    // RootNavigator authenticated user'ı ana tab'e yönlendirir
+    // Flag'i AsyncStorage'a yaz → RootNavigator otomatik MainNavigator'a geçer
+    await completeOnboarding();
   }
 
   const levelColor = level <= 3 ? Colors.success : level <= 6 ? '#BA7517' : Colors.error;
@@ -111,16 +115,13 @@ export default function OnboardingStep3Screen({ navigation, route }: Props) {
             <View
               style={[
                 styles.levelTrackFill,
-                {
-                  width: `${level * 10}%`,
-                  backgroundColor: levelColor,
-                },
+                { width: `${level * 10}%`, backgroundColor: levelColor },
               ]}
             />
           </View>
 
           <GradientButton
-            label="Tamamla"
+            label="Tamamla ve Başla"
             onPress={handleFinish}
             loading={loading}
             style={{ marginTop: Spacing.xl }}
@@ -180,11 +181,7 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   chipText: { fontSize: FontSize.sm, color: Colors.textSecondary },
   chipTextActive: { color: Colors.white, fontWeight: '600' },
-  levelRow: {
-    flexDirection: 'row',
-    gap: 4,
-    marginBottom: Spacing.sm,
-  },
+  levelRow: { flexDirection: 'row', gap: 4, marginBottom: Spacing.sm },
   levelBtn: {
     flex: 1,
     height: 36,

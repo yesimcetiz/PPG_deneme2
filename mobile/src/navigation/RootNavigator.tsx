@@ -1,15 +1,22 @@
 import React, { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
 import AuthNavigator from './AuthNavigator';
+import OnboardingNavigator from './OnboardingNavigator';
+import MainNavigator from './MainNavigator';
 import { Colors } from '../constants/theme';
 
-// Ileride ana tab navigator buraya gelecek
-// import MainNavigator from './MainNavigator';
-
+/**
+ * Routing mantığı:
+ *  1. isLoading          → spinner
+ *  2. !isAuthenticated   → AuthNavigator  (Welcome / Login / Register)
+ *  3. !onboardingComplete → OnboardingNavigator (3 adım)
+ *  4. isAuthenticated + onboardingComplete → MainNavigator (ana uygulama)
+ */
 export default function RootNavigator() {
-  const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
+  const { isAuthenticated, isLoading, onboardingComplete, checkAuth } = useAuthStore();
 
   useEffect(() => {
     checkAuth();
@@ -17,22 +24,26 @@ export default function RootNavigator() {
 
   if (isLoading) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
+      <SafeAreaProvider>
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </SafeAreaProvider>
     );
   }
 
   return (
-    <NavigationContainer>
-      {isAuthenticated ? (
-        // TODO: <MainNavigator />
-        // Geçici: auth sonrası da AuthNavigator'ı göster
-        <AuthNavigator />
-      ) : (
-        <AuthNavigator />
-      )}
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        {!isAuthenticated ? (
+          <AuthNavigator />
+        ) : !onboardingComplete ? (
+          <OnboardingNavigator />
+        ) : (
+          <MainNavigator />
+        )}
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 

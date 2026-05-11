@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView,
+  View, Text, StyleSheet, ScrollView,
   KeyboardAvoidingView, Platform, TouchableOpacity,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { AuthStackParamList } from '../../navigation/AuthNavigator';
+import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
 import AuthHeader from '../../components/ui/AuthHeader';
 import InputField from '../../components/ui/InputField';
 import GradientButton from '../../components/ui/GradientButton';
 import { Colors, FontSize, Spacing, Radius } from '../../constants/theme';
 
-type Props = NativeStackScreenProps<AuthStackParamList, 'Onboarding2'>;
+type Props = NativeStackScreenProps<OnboardingStackParamList, 'Onboarding2'>;
 
 export default function OnboardingStep2Screen({ navigation, route }: Props) {
   const { step1 } = route.params;

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  View, Text, StyleSheet, SafeAreaView,
+  View, Text, StyleSheet,
   ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,6 +9,7 @@ import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import AuthHeader from '../../components/ui/AuthHeader';
 import InputField from '../../components/ui/InputField';
 import GradientButton from '../../components/ui/GradientButton';
+import PasswordStrengthBar, { validatePassword } from '../../components/ui/PasswordStrengthBar';
 import { useAuthStore } from '../../store/authStore';
 import { ApiError } from '../../services/api';
 import { Colors, FontSize, Spacing } from '../../constants/theme';
@@ -16,39 +18,73 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
 export default function RegisterScreen({ navigation }: Props) {
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
+  const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
+  const [confirm,  setConfirm]  = useState('');
+  const [errors,   setErrors]   = useState<Record<string, string>>({});
+  const [loading,  setLoading]  = useState(false);
 
   const register = useAuthStore((s) => s.register);
 
-  function validate() {
+  // ── Client-side validation ────────────────────────────────
+  /**
+   * Backend ile aynı kuralları burada da uyguluyoruz.
+   * Neden? Kullanıcıya hızlı geri bildirim vermek için.
+   * Backend yine de doğrular — bu sadece UX iyileştirmesi.
+   */
+  function validate(): boolean {
     const e: Record<string, string> = {};
-    if (!fullName.trim()) e.fullName = 'Ad Soyad gerekli.';
-    if (!email.trim()) e.email = 'Email gerekli.';
-    else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Geçerli bir email gir.';
-    if (password.length < 6) e.password = 'Şifre en az 6 karakter olmalı.';
-    if (password !== confirm) e.confirm = 'Şifreler eşleşmiyor.';
+
+    if (!fullName.trim() || fullName.trim().length < 2) {
+      e.fullName = 'Ad soyad en az 2 karakter olmalı.';
+    }
+    if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) {
+      e.email = 'Geçerli bir email gir.';
+    }
+
+    // PasswordStrengthBar ile aynı mantığı kullanan validatePassword()
+    const { isValid, errors: pwErrors } = validatePassword(password);
+    if (!isValid) {
+      e.password = pwErrors[0]; // İlk hatayı göster
+    }
+    if (password !== confirm) {
+      e.confirm = 'Şifreler eşleşmiyor.';
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
+  // ── Kayıt işlemi ─────────────────────────────────────────
   async function handleRegister() {
     if (!validate()) return;
     setLoading(true);
     setErrors({});
+
     try {
       await register(fullName.trim(), email.trim().toLowerCase(), password);
-      // Başarılı → onboarding'e yönlendir
-      navigation.navigate('Onboarding1');
+      /**
+       * Navigation YOK — kasıtlı!
+       * register() çağrısı sonrası authStore'da isAuthenticated=true,
+       * onboardingComplete=false olur. RootNavigator bu değişikliği
+       * izlediği için otomatik olarak OnboardingNavigator'ı gösterir.
+       * Manuel navigate() yapmak gerekmez, zaten çalışmaz da
+       * (OnboardingNavigator, AuthNavigator'ın içinde değil).
+       */
     } catch (err) {
-      const msg = err instanceof ApiError ? err.detail : 'Bağlantı hatası.';
-      if (err instanceof ApiError && err.status === 400) {
-        setErrors({ email: 'Bu email zaten kayıtlı.' });
+      if (err instanceof ApiError) {
+        if (err.status === 400) {
+          // "Bu email zaten kayıtlı"
+          setErrors({ email: err.detail });
+        } else if (err.status === 422) {
+          // Pydantic validation hatası — backend'den gelen mesajı göster
+          // detail genellikle şu formatta: "Şifre şunları içermeli: en az 8 karakter."
+          setErrors({ password: err.detail });
+        } else {
+          setErrors({ general: err.detail || 'Bir hata oluştu.' });
+        }
       } else {
-        setErrors({ general: msg });
+        setErrors({ general: 'Bağlantı hatası. Backend çalışıyor mu?' });
       }
     } finally {
       setLoading(false);
@@ -61,7 +97,11 @@ export default function RegisterScreen({ navigation }: Props) {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={styles.scroll} bounces={false}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          bounces={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <AuthHeader />
 
           <View style={styles.body}>
@@ -79,7 +119,7 @@ export default function RegisterScreen({ navigation }: Props) {
               value={fullName}
               onChangeText={setFullName}
               error={errors.fullName}
-              placeholder="Ezgi Dok"
+              placeholder="Yeşim Cetiz"
               autoComplete="name"
             />
             <InputField
@@ -97,8 +137,12 @@ export default function RegisterScreen({ navigation }: Props) {
               onChangeText={setPassword}
               error={errors.password}
               isPassword
-              placeholder="En az 6 karakter"
+              placeholder="En az 8 karakter"
             />
+
+            {/* Şifre güç göstergesi — kullanıcı yazmaya başlayınca görünür */}
+            <PasswordStrengthBar password={password} />
+
             <InputField
               label="Şifre tekrar"
               value={confirm}
@@ -113,6 +157,8 @@ export default function RegisterScreen({ navigation }: Props) {
               onPress={handleRegister}
               loading={loading}
               style={{ marginTop: Spacing.lg }}
+              // Tüm kurallar geçilmeden butonu disable et
+              disabled={!!password && !validatePassword(password).isValid}
             />
 
             <View style={styles.switchRow}>
@@ -136,7 +182,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xl,
     paddingBottom: Spacing.xxxl,
   },
-  title: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text },
+  title:    { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text },
   subtitle: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: 2 },
   switchRow: {
     flexDirection: 'row',

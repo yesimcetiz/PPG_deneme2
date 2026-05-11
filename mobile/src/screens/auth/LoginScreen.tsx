@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  View, Text, StyleSheet, SafeAreaView,
+  View, Text, StyleSheet,
   ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -98,12 +99,6 @@ export default function LoginScreen({ navigation }: Props) {
               loading={loading}
               style={{ marginTop: Spacing.lg }}
             />
-            <GradientButton
-              label="Google ile devam et"
-              onPress={() => {}}
-              variant="outline"
-            />
-
             <View style={styles.switchRow}>
               <Text style={styles.switchText}>Hesabın yok mu? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Register')}>

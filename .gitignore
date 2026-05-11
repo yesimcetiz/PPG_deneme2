@@ -1,4 +1,18 @@
 data/
 venv/
 __pycache__/
-.DS_Storenpycache__/
+.DS_Store
+
+# Ortam değişkenleri — kesinlikle commit edilmemeli
+.env
+.env.*
+!.env.example
+
+# Python
+*.pyc
+*.pyo
+
+# Node / Expo
+node_modules/
+mobile/.expo/
+mobile/dist/
