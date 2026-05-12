@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BASE_URL = __DEV__
   ? 'http://172.20.10.2:8000'
-  : 'https://api.stressless.app';
+  : 'https://ppgdeneme2-production.up.railway.app';
 
 const TOKEN_KEY         = 'sl_access_token';
 const REFRESH_TOKEN_KEY = 'sl_refresh_token';
