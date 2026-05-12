@@ -27,7 +27,7 @@ THR = 0.50
 
 
 # ============================================================
-# FEATURE SETS (must match your train/inference scripts)
+# FEATURE SETS 
 # ============================================================
 FEATURE_SETS = {
     "base4_z": [
