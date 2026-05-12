@@ -22,6 +22,20 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: str = "*"
 
     @property
+    def db_url(self) -> str:
+        """
+        DATABASE_URL'yi psycopg3 uyumlu formata çevir.
+        Railway postgres:// veya postgresql:// verir;
+        SQLAlchemy + psycopg3 postgresql+psycopg:// gerektirir.
+        """
+        url = self.DATABASE_URL
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+psycopg://", 1)
+        elif url.startswith("postgresql://") and "+psycopg" not in url:
+            url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+        return url
+
+    @property
     def admin_email_list(self) -> List[str]:
         return [e.strip() for e in self.ADMIN_EMAILS.split(",") if e.strip()]
 
