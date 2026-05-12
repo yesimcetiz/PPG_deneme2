@@ -3,7 +3,7 @@ import time
 import pandas as pd
 import numpy as np
 
-PORT = "/dev/cu.usbmodem1101"   # <-- change this
+PORT = "/dev/cu.usbmodem5A7C1848531"   
 BAUD = 115200
 
 OUT_RAW = "ppg_stream_raw2.csv"
@@ -27,7 +27,11 @@ try:
         if not line:
             continue
 
+        print("RAW:", line)
+
         parts = line.split("\t")
+        print("PARTS:", len(parts))
+
         if len(parts) != len(columns):
             continue
 

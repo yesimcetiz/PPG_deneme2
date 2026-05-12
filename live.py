@@ -18,7 +18,7 @@ except Exception:
 # ============================================================
 # CONFIG
 # ============================================================
-PORT = "/dev/cu.usbmodem101"   # macOS: change this
+PORT = "/dev/cu.usbmodem5A7C1848531"   # macOS: change this
 BAUD = 115200
 
 MODEL_PATH = Path("stress_model_logreg_best.pkl")
