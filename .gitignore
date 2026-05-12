@@ -12,6 +12,10 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Office geçici dosyaları
+~$*
+*.tmp
+
 # Node / Expo
 node_modules/
 mobile/.expo/
