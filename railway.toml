@@ -1,6 +1,7 @@
 [build]
-builder = "dockerfile"
-dockerfilePath = "Dockerfile"
+# Railpack'e backend/ dizinini proje kökü olarak göster
+# Böylece requirements.txt doğru okunur ve Procfile algılanır
+rootDirectory = "backend"
 
 [deploy]
 healthcheckPath = "/health"
