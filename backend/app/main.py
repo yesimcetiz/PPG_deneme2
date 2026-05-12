@@ -8,16 +8,28 @@ from app.core.logging import RequestLoggingMiddleware, logger
 from app.routers import auth, profile, ppg, admin, chat, debug
 
 
-# DB tablolarını oluştur (fallback — asıl yol: alembic upgrade head)
-try:
-    Base.metadata.create_all(bind=engine, checkfirst=True)
-    logger.info("✓ DB tabloları kontrol edildi.")
-except Exception as e:
-    if "already exists" in str(e):
-        logger.info("✓ DB tabloları zaten mevcut.")
-    else:
-        logger.error(f"DB başlatma hatası: {e}")
-        raise
+# Alembic migration'larını otomatik uygula (eksik kolonları ekler)
+def run_migrations():
+    import os
+    from alembic.config import Config
+    from alembic import command
+
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    alembic_cfg = Config(os.path.join(base_dir, "alembic.ini"))
+    alembic_cfg.set_main_option(
+        "script_location", os.path.join(base_dir, "alembic")
+    )
+    try:
+        command.upgrade(alembic_cfg, "head")
+        logger.info("✓ Alembic migrations uygulandı.")
+    except Exception as e:
+        logger.warning(f"Migration uyarısı (ilk kurulumda normal): {e}")
+        # Fallback: create_all
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+        logger.info("✓ DB tabloları create_all ile kontrol edildi.")
+
+
+run_migrations()
 
 # Production'da Swagger UI'ı kapat (güvenlik)
 app = FastAPI(
