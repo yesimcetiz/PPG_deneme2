@@ -8,28 +8,38 @@ from app.core.logging import RequestLoggingMiddleware, logger
 from app.routers import auth, profile, ppg, admin, chat, debug
 
 
-# Alembic migration'larını otomatik uygula (eksik kolonları ekler)
-def run_migrations():
-    import os
-    from alembic.config import Config
-    from alembic import command
+# DB kurulumu: tablolar + eksik kolonlar
+def setup_database():
+    from sqlalchemy import text, inspect
 
-    base_dir = os.path.dirname(os.path.dirname(__file__))
-    alembic_cfg = Config(os.path.join(base_dir, "alembic.ini"))
-    alembic_cfg.set_main_option(
-        "script_location", os.path.join(base_dir, "alembic")
-    )
-    try:
-        command.upgrade(alembic_cfg, "head")
-        logger.info("✓ Alembic migrations uygulandı.")
-    except Exception as e:
-        logger.warning(f"Migration uyarısı (ilk kurulumda normal): {e}")
-        # Fallback: create_all
-        Base.metadata.create_all(bind=engine, checkfirst=True)
-        logger.info("✓ DB tabloları create_all ile kontrol edildi.")
+    # 1. Tabloları oluştur (yoksa)
+    Base.metadata.create_all(bind=engine, checkfirst=True)
+    logger.info("✓ DB tabloları kontrol edildi.")
+
+    # 2. Eksik kolonları doğrudan ekle (migration olmadan)
+    with engine.connect() as conn:
+        insp = inspect(engine)
+        users_cols = [c["name"] for c in insp.get_columns("users")]
+
+        if "refresh_token_hash" not in users_cols:
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN refresh_token_hash VARCHAR"
+            ))
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN refresh_token_expires_at "
+                "TIMESTAMP WITH TIME ZONE"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_users_refresh_token_hash "
+                "ON users (refresh_token_hash)"
+            ))
+            conn.commit()
+            logger.info("✓ refresh_token kolonları eklendi.")
+        else:
+            logger.info("✓ refresh_token kolonları zaten mevcut.")
 
 
-run_migrations()
+setup_database()
 
 # Production'da Swagger UI'ı kapat (güvenlik)
 app = FastAPI(
