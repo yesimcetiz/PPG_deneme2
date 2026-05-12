@@ -1,10 +1,11 @@
 [build]
-# Railpack'e backend/ dizinini proje kökü olarak göster
-# Böylece requirements.txt doğru okunur ve Procfile algılanır
+# Railpack kullan — Dockerfile cache sorunu yok
+# rootDirectory sayesinde backend/requirements.txt okunur (bcrypt==4.0.1 dahil)
 rootDirectory = "backend"
 
 [deploy]
+# Healthcheck — pip install + uvicorn startup için yeterli süre
 healthcheckPath = "/health"
-healthcheckTimeout = 30
+healthcheckTimeout = 120
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
