@@ -48,6 +48,52 @@ class InferenceResponse(BaseModel):
     saved_result_id: Optional[int] = None
 
 
+# ─── Scenario B: ESP32 TinyML sonucunu kaydet ────────────────
+
+class PpgLogRequest(BaseModel):
+    """ESP32'den BLE üzerinden gelen işlenmiş sonuç."""
+    heart_rate: float
+    hrv_rmssd: float
+    stress_score: float          # 0–100
+    stress_level: str            # "relaxed" | "moderate" | "high"
+    device_id: Optional[str] = None
+
+
+@router.post("/log")
+def log_ppg_result(
+    data: PpgLogRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    ESP32 TinyML modelinin çıktısını backend'e kaydeder.
+    Backend ML çalıştırmaz — sadece saklar ve session_id döner.
+    Mobil: ppgApi.logResult() bu endpoint'i çağırır.
+    """
+    # stress_level → y_pred dönüşümü: high=2, moderate=1, relaxed=0
+    level_map = {"high": 2, "moderate": 1, "relaxed": 0}
+    y_pred = level_map.get(data.stress_level, 0)
+
+    result = PPGResult(
+        user_id=current_user.id,
+        p_stress=data.stress_score / 100.0,
+        y_pred_raw=y_pred,
+        y_pred_smooth=y_pred,
+        mean_hr=data.heart_rate,
+        rmssd=data.hrv_rmssd,
+        feature_set_used=f"ESP32-TinyML:{data.device_id}" if data.device_id else "ESP32-TinyML",
+        session_phase="BLE",
+    )
+    db.add(result)
+    db.commit()
+    db.refresh(result)
+
+    return {
+        "session_id": str(result.id),
+        "analyzed_at": result.created_at.isoformat(),
+    }
+
+
 @router.post("/analyze", response_model=InferenceResponse)
 def analyze_ppg(
     request: InferenceRequest,
@@ -127,7 +173,7 @@ def get_my_history(
             "session_id": str(r.id),
             "heart_rate": round(r.mean_hr or 0, 1),
             "hrv_rmssd":  round(r.rmssd or 0, 1),
-            "stress_level": "high" if r.y_pred_smooth == 1 else "relaxed",
+            "stress_level": "high" if r.y_pred_smooth == 2 else "moderate" if r.y_pred_smooth == 1 else "relaxed",
             "stress_score": round(r.p_stress * 100),
             "analyzed_at": r.created_at.isoformat(),
         }
