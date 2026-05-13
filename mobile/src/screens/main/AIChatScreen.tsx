@@ -14,9 +14,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useRoute, RouteProp } from '@react-navigation/native';
 import { chatApi, profileApi, ChatMessage, HealthProfilePayload } from '../../services/api';
 import { usePpgStore } from '../../store/ppgStore';
 import { useAuthStore } from '../../store/authStore';
+import { MainTabParamList } from '../../navigation/MainNavigator';
 import { Colors, FontSize, Radius, Shadow, Spacing } from '../../constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────
@@ -30,11 +32,11 @@ interface UiMessage {
 
 
 const SUGGESTED_PROMPTS = [
-  'What medications do I need to take today?',
-  'Analyze my latest PPG reading.',
-  'How stressed am I right now?',
-  'Give me a breathing exercise.',
-  'What does my HRV indicate?',
+  'Bugün ilaçlarımı almam gerekiyor mu?',
+  'Son PPG ölçümümü analiz eder misin?',
+  'Şu an ne kadar stresli görünüyorum?',
+  'Bana bir nefes egzersizi önerir misin?',
+  'HRV değerim ne anlama geliyor?',
 ];
 
 // ─── Message bubble ───────────────────────────────────────────
@@ -85,6 +87,9 @@ function Bubble({ message }: BubbleProps) {
 // ─── Main Screen ─────────────────────────────────────────────
 
 export default function AIChatScreen() {
+  const route = useRoute<RouteProp<MainTabParamList, 'Chat'>>();
+  const initialMessage = route.params?.initialMessage;
+
   const user = useAuthStore((s) => s.user);
   const { latestResult } = usePpgStore();
   const stressLevel = latestResult?.status ?? null;
@@ -100,28 +105,39 @@ export default function AIChatScreen() {
   >(null);
 
   const listRef = useRef<FlatList<UiMessage>>(null);
+  const initialMsgSentRef = useRef(false);
 
-  // ── Boot: silently fetch health profile once ───────────────
+  // ── Boot: sağlık profilini çek, karşılama mesajı göster ───
   useEffect(() => {
     (async () => {
       try {
         const profile = await profileApi.get();
         setHealthProfile(profile);
       } catch {
-        // Profile may not exist yet for new users — that's fine
+        // Yeni kullanıcıda profil olmayabilir — sorun değil
       } finally {
         setIsInitializing(false);
         setMessages([
           {
             id: 'welcome',
             role: 'assistant',
-            content: `Hi ${user?.full_name?.split(' ')[0] ?? 'there'}! 👋 I'm your personal health assistant. I have access to your health profile and latest sensor readings. Ask me anything — from medication reminders to stress analysis.`,
+            content: `Merhaba ${user?.full_name?.split(' ')[0] ?? 'Yeşim'}! 👋 Ben kişisel sağlık asistanınım. Sağlık profilinize ve son sensör ölçümlerinize erişimim var. İlaç hatırlatıcıdan stres analizine kadar her şeyi sorabilirsiniz.`,
             timestamp: new Date(),
           },
         ]);
       }
     })();
   }, [user?.full_name]);
+
+  // ── Banner'dan gelen initialMessage'ı otomatik gönder ─────
+  useEffect(() => {
+    if (!initialMessage || isInitializing || initialMsgSentRef.current) return;
+    initialMsgSentRef.current = true;
+    // Karşılama mesajı render olduktan sonra gönder
+    const t = setTimeout(() => sendMessage(initialMessage), 600);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMessage, isInitializing]);
 
   // ── Build conversation history for API (exclude system messages) ──
   const buildHistory = useCallback(
@@ -186,7 +202,7 @@ export default function AIChatScreen() {
         const errMsg: UiMessage = {
           id: `err-${Date.now()}`,
           role: 'system',
-          content: 'Could not reach the AI. Please try again.',
+          content: 'AI servisine ulaşılamadı. Lütfen tekrar deneyin.',
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, errMsg]);
@@ -221,11 +237,11 @@ export default function AIChatScreen() {
           <Ionicons name="sparkles" size={18} color="#fff" />
         </LinearGradient>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>AI Health Assistant</Text>
+          <Text style={styles.headerTitle}>AI Sağlık Asistanı</Text>
           <Text style={styles.headerSub}>
             {stressLevel
-              ? `Current stress: ${stressLevel}`
-              : 'Personalized to your health profile'}
+              ? `Güncel stres: ${stressLevel}`
+              : 'Sağlık profilinize özel'}
           </Text>
         </View>
       </View>
@@ -248,7 +264,7 @@ export default function AIChatScreen() {
               <View style={styles.typingIndicator}>
                 <View style={styles.typingDots}>
                   <ActivityIndicator size="small" color={Colors.primaryMid} />
-                  <Text style={styles.typingText}>Thinking…</Text>
+                  <Text style={styles.typingText}>Yanıt yazılıyor…</Text>
                 </View>
               </View>
             ) : null
@@ -258,7 +274,7 @@ export default function AIChatScreen() {
         {/* ── Suggested prompts ── */}
         {showSuggestions && (
           <View style={styles.suggestionsWrap}>
-            <Text style={styles.suggestionsLabel}>Try asking</Text>
+            <Text style={styles.suggestionsLabel}>Örnek sorular</Text>
             <View style={styles.chips}>
               {SUGGESTED_PROMPTS.map((p) => (
                 <TouchableOpacity
@@ -280,7 +296,7 @@ export default function AIChatScreen() {
             style={styles.input}
             value={inputText}
             onChangeText={setInputText}
-            placeholder="Ask about your health…"
+            placeholder="Sağlığınız hakkında bir şey sorun…"
             placeholderTextColor={Colors.textMuted}
             multiline
             maxLength={1000}

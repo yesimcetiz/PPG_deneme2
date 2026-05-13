@@ -46,7 +46,7 @@ def send_message(
 
     ppg_context = None
     if last_ppg:
-        stress_label = "high" if last_ppg.y_pred_smooth == 1 else "relaxed"
+        stress_label = "high" if last_ppg.y_pred_smooth == 2 else "moderate" if last_ppg.y_pred_smooth == 1 else "relaxed"
         ppg_context = {
             "latest_stress_level": stress_label,
             "latest_heart_rate": round(last_ppg.mean_hr) if last_ppg.mean_hr else None,

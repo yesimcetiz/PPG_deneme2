@@ -17,7 +17,7 @@ import { Colors, FontSize } from '../constants/theme';
 
 export type MainTabParamList = {
   Dashboard: undefined;
-  Chat: undefined;
+  Chat: { initialMessage?: string } | undefined;
   History: undefined;
   Profile: undefined;
 };

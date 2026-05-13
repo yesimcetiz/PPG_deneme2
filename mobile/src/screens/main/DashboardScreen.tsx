@@ -3,18 +3,23 @@
  * ESP32'den gelen işlenmiş stres sonucunu gösterir.
  * Ham PPG grafiği yok — sadece stres skoru, HR, HRV ve bağlantı durumu.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, Alert, ActivityIndicator, Dimensions,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { usePpgStore, StressLevel, SensorResult } from '../../store/ppgStore';
 import { useAuthStore } from '../../store/authStore';
 import HardwareService from '../../services/HardwareService';
 import DemoService from '../../services/DemoService';
+import { ppgApi } from '../../services/api';
+import { MainTabParamList } from '../../navigation/MainNavigator';
 import { Colors, FontSize, Radius, Shadow, Spacing } from '../../constants/theme';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -121,14 +126,74 @@ function HistoryBar({ history }: { history: SensorResult[] }) {
   );
 }
 
+// ─── Sağlık hatırlatma banner'ı ──────────────────────────────
+
+const BANNER_QUESTIONS = [
+  { label: '💊 İlaçlarımı aldım mı?',  message: 'Son PPG ölçümüm tamamlandı. Bugün ilaçlarımı alıp almadığımı hatırlatır mısın?' },
+  { label: '🍽️ Yemek yedim mi?',       message: 'Son PPG ölçümüm bitti. Bugün düzenli yemek yiyip yemediğimi analiz eder misin?' },
+  { label: '📊 Sonucu analiz et',       message: 'Az önce PPG ölçümüm tamamlandı. Stres seviyemi ve genel sağlık durumumu yorumlar mısın?' },
+];
+
+function HealthCheckBanner({
+  onAsk,
+  onDismiss,
+}: {
+  onAsk: (msg: string) => void;
+  onDismiss: () => void;
+}) {
+  const slideAnim = useRef(new Animated.Value(120)).current;
+
+  useEffect(() => {
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 80,
+      friction: 12,
+    }).start();
+  }, [slideAnim]);
+
+  return (
+    <Animated.View style={[styles.banner, { transform: [{ translateY: slideAnim }] }]}>
+      <View style={styles.bannerHeader}>
+        <View style={styles.bannerTitleRow}>
+          <Text style={styles.bannerEmoji}>✅</Text>
+          <Text style={styles.bannerTitle}>Ölçüm tamamlandı!</Text>
+        </View>
+        <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="close" size={18} color={Colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.bannerSubtitle}>AI asistanına bir şey sormak ister misin?</Text>
+      <View style={styles.bannerChips}>
+        {BANNER_QUESTIONS.map((q) => (
+          <TouchableOpacity
+            key={q.label}
+            style={styles.bannerChip}
+            onPress={() => onAsk(q.message)}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.bannerChipText}>{q.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </Animated.View>
+  );
+}
+
 // ─── Ana ekran ───────────────────────────────────────────────
 
 export default function DashboardScreen() {
+  const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const user = useAuthStore((s) => s.user);
   const { bleState, connectedDeviceName, latestResult, resultHistory } = usePpgStore();
 
   const [isDemoRunning, setIsDemoRunning] = useState(false);
   const [isConnecting,  setIsConnecting]  = useState(false);
+  const [showBanner,    setShowBanner]    = useState(false);
+
+  const bannerTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dismissTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedTsRef   = useRef<number>(0);  // tekrar kayıt önleme
 
   const isConnected = bleState === 'connected';
 
@@ -162,9 +227,49 @@ export default function DashboardScreen() {
     }
   }, [isConnected]);
 
+  // ─── Yeni ölçüm gelince backend'e kaydet + banner göster ───
+  useEffect(() => {
+    if (!latestResult) return;
+
+    // Aynı timestamp'ı iki kez kaydetme
+    if (latestResult.timestamp === lastSavedTsRef.current) return;
+    lastSavedTsRef.current = latestResult.timestamp;
+
+    // Backend'e kaydet (hata olursa sessizce geç)
+    ppgApi.logResult({
+      heart_rate:   latestResult.hr,
+      hrv_rmssd:    latestResult.hrv,
+      stress_score: latestResult.stress_score,
+      stress_level: latestResult.status,
+    }).catch(() => {/* offline veya auth hatası — yoksay */});
+
+    // 4 saniye sonra banner göster
+    if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    bannerTimerRef.current = setTimeout(() => {
+      setShowBanner(true);
+      // 10 saniye sonra otomatik kapat
+      dismissTimerRef.current = setTimeout(() => setShowBanner(false), 10_000);
+    }, 4_000);
+  }, [latestResult]);
+
+  // Banner'ı soran butona basınca Chat'e yönlendir
+  const handleBannerAsk = useCallback((message: string) => {
+    setShowBanner(false);
+    if (bannerTimerRef.current)  clearTimeout(bannerTimerRef.current);
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+    navigation.navigate('Chat', { initialMessage: message });
+  }, [navigation]);
+
+  const handleBannerDismiss = useCallback(() => {
+    setShowBanner(false);
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (DemoService.isRunning()) DemoService.stop();
+      if (bannerTimerRef.current)  clearTimeout(bannerTimerRef.current);
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
     };
   }, []);
 
@@ -187,6 +292,13 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* ── Sağlık Hatırlatma Banner'ı ── */}
+      {showBanner && (
+        <HealthCheckBanner
+          onAsk={handleBannerAsk}
+          onDismiss={handleBannerDismiss}
+        />
+      )}
       <ScrollView
         contentContainerStyle={{ paddingBottom: 96 }}
         showsVerticalScrollIndicator={false}
@@ -368,4 +480,43 @@ const styles = StyleSheet.create({
   },
   connectBtnDisconnect: { backgroundColor: Colors.error },
   connectBtnText: { color: Colors.white, fontSize: FontSize.xs, fontWeight: '600' },
+
+  // ─── Sağlık Banner ───
+  banner: {
+    position: 'absolute',
+    bottom: 96,
+    left: Spacing.lg,
+    right: Spacing.lg,
+    zIndex: 100,
+    backgroundColor: Colors.white,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  bannerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  bannerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  bannerEmoji:   { fontSize: 16 },
+  bannerTitle:   { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  bannerSubtitle:{ fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: Spacing.md },
+  bannerChips:   { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  bannerChip: {
+    backgroundColor: Colors.primaryLight,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  bannerChipText: { fontSize: FontSize.xs, color: Colors.primaryMid, fontWeight: '600' },
 });
