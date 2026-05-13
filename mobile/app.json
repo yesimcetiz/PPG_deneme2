@@ -12,8 +12,10 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "Stress Less needs Bluetooth to connect to your PPG sensor and read heart rate data.",
-        "NSBluetoothPeripheralUsageDescription": "Stress Less needs Bluetooth to connect to your PPG sensor."
-      }
+        "NSBluetoothPeripheralUsageDescription": "Stress Less needs Bluetooth to connect to your PPG sensor.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.yesimcetiz.stressless"
     },
     "android": {
       "adaptiveIcon": {

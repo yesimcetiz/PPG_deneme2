@@ -1,19 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BASE_URL = __DEV__
-  ? 'http://172.20.10.2:8000'
+  ? 'http://192.168.111.4:8000'
   : 'https://ppgdeneme2-production.up.railway.app';
 
-const TOKEN_KEY         = 'sl_access_token';
+const TOKEN_KEY = 'sl_access_token';
 const REFRESH_TOKEN_KEY = 'sl_refresh_token';
 
 // ─── Token helpers ───────────────────────────────────────────
-export const saveToken        = (t: string) => AsyncStorage.setItem(TOKEN_KEY, t);
-export const getToken         = ()          => AsyncStorage.getItem(TOKEN_KEY);
-export const clearToken       = ()          => AsyncStorage.removeItem(TOKEN_KEY);
+export const saveToken = (t: string) => AsyncStorage.setItem(TOKEN_KEY, t);
+export const getToken = () => AsyncStorage.getItem(TOKEN_KEY);
+export const clearToken = () => AsyncStorage.removeItem(TOKEN_KEY);
 export const saveRefreshToken = (t: string) => AsyncStorage.setItem(REFRESH_TOKEN_KEY, t);
-export const getRefreshToken  = ()          => AsyncStorage.getItem(REFRESH_TOKEN_KEY);
-export const clearRefreshToken= ()          => AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
+export const getRefreshToken = () => AsyncStorage.getItem(REFRESH_TOKEN_KEY);
+export const clearRefreshToken = () => AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
 
 // ─── Error class ─────────────────────────────────────────────
 export class ApiError extends Error {
@@ -71,9 +71,9 @@ async function request<T>(
 
       // Refresh endpoint'i çağır
       const refreshRes = await fetch(`${BASE_URL}/auth/refresh`, {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ refresh_token: refreshToken }),
+        body: JSON.stringify({ refresh_token: refreshToken }),
       });
 
       if (!refreshRes.ok) {
@@ -188,20 +188,20 @@ export const profileApi = {
 
 export interface PpgLogRequest {
   // ESP32'den gelen işlenmiş sonuç
-  heart_rate:   number;
-  hrv_rmssd:    number;
+  heart_rate: number;
+  hrv_rmssd: number;
   stress_score: number;
   stress_level: 'relaxed' | 'moderate' | 'high';
-  device_id?:   string;
+  device_id?: string;
 }
 
 export interface PpgSessionSummary {
-  session_id:   string;
-  heart_rate:   number;
-  hrv_rmssd:    number;
+  session_id: string;
+  heart_rate: number;
+  hrv_rmssd: number;
   stress_level: 'relaxed' | 'moderate' | 'high';
   stress_score: number;
-  analyzed_at:  string;
+  analyzed_at: string;
 }
 
 export const ppgApi = {
