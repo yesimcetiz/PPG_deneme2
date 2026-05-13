@@ -182,40 +182,35 @@ export const profileApi = {
     }),
 };
 
-// ─── PPG Types & API ─────────────────────────────────────────
-export interface PpgSamplePayload {
-  value: number;
-  timestamp: number;
-}
+// ─── PPG Types & API — Scenario B (Edge AI) ──────────────────
+// ESP32 TinyML modelini çalıştırır ve sonucu gönderir.
+// Mobil, sonucu backend'e KAYIT için gönderir (analiz için değil).
 
-export interface PpgAnalyzeRequest {
-  samples: PpgSamplePayload[];
-  device_id: string;
-  sample_rate_hz?: number;
-}
-
-export interface PpgAnalyzeResponse {
-  session_id: string;
-  heart_rate: number;
-  hrv_rmssd: number;
-  stress_level: 'relaxed' | 'moderate' | 'high';
+export interface PpgLogRequest {
+  // ESP32'den gelen işlenmiş sonuç
+  heart_rate:   number;
+  hrv_rmssd:    number;
   stress_score: number;
-  confidence: number;
-  analyzed_at: string;
+  stress_level: 'relaxed' | 'moderate' | 'high';
+  device_id?:   string;
 }
 
 export interface PpgSessionSummary {
-  session_id: string;
-  heart_rate: number;
-  hrv_rmssd: number;
+  session_id:   string;
+  heart_rate:   number;
+  hrv_rmssd:    number;
   stress_level: 'relaxed' | 'moderate' | 'high';
   stress_score: number;
-  analyzed_at: string;
+  analyzed_at:  string;
 }
 
 export const ppgApi = {
-  analyze: (data: PpgAnalyzeRequest) =>
-    request<PpgAnalyzeResponse>('/ppg/analyze', {
+  /**
+   * ESP32'den gelen işlenmiş sonucu backend'e kaydeder.
+   * Backend ML çalıştırmaz — sadece saklar.
+   */
+  logResult: (data: PpgLogRequest) =>
+    request<{ session_id: string; analyzed_at: string }>('/ppg/log', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

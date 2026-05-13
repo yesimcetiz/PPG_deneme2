@@ -1,114 +1,78 @@
 import { create } from 'zustand';
 
-// ─── Enums & Types ───────────────────────────────────────────
+// ─── Tipler ──────────────────────────────────────────────────
 
 export type StressLevel = 'relaxed' | 'moderate' | 'high';
-export type BleConnectionState = 'disconnected' | 'scanning' | 'connecting' | 'connected' | 'error';
+export type BleConnectionState =
+  | 'disconnected'
+  | 'scanning'
+  | 'connecting'
+  | 'connected'
+  | 'error';
 
-export interface PpgSample {
-  value: number;     // raw ADC / normalized 0–1
-  timestamp: number; // ms epoch
-}
-
-export interface PpgAnalysisResult {
-  session_id: string;
-  heart_rate: number;          // bpm
-  hrv_rmssd: number;           // ms
-  stress_level: StressLevel;
-  stress_score: number;        // 0–100
-  confidence: number;          // 0–1
-  analyzed_at: string;         // ISO timestamp
+/**
+ * ESP32'den BLE üzerinden gelen JSON paketinin yapısı.
+ * Örnek: {"stress_score": 72, "hr": 85, "hrv": 32, "status": "moderate"}
+ */
+export interface SensorResult {
+  stress_score: number;   // 0–100
+  hr: number;             // bpm
+  hrv: number;            // RMSSD ms
+  status: StressLevel;    // "relaxed" | "moderate" | "high"
+  timestamp: number;      // ms epoch (cihaz zamanı veya alım zamanı)
 }
 
 export interface PpgState {
-  // BLE hardware
+  // BLE bağlantı durumu
   bleState: BleConnectionState;
   connectedDeviceId: string | null;
   connectedDeviceName: string | null;
 
-  // Streaming data (ring buffer, max 200 samples for chart)
-  ppgBuffer: PpgSample[];
-  bufferMaxSize: number;
+  // Son sensör okuması (ESP32'den gelen işlenmiş sonuç)
+  latestResult: SensorResult | null;
 
-  // Derived metrics (updated after each /ppg/analyze response)
-  heartRate: number | null;
-  hrvRmssd: number | null;
-  stressLevel: StressLevel | null;
-  stressScore: number | null;
-  latestResult: PpgAnalysisResult | null;
-
-  // Streaming accumulator sent to backend in batches
-  pendingSamples: PpgSample[];
+  // Kısa geçmiş — grafik veya trend için (son 20 okuma)
+  resultHistory: SensorResult[];
 
   // Actions
   setBleState: (state: BleConnectionState) => void;
   setConnectedDevice: (id: string | null, name: string | null) => void;
-  pushSample: (sample: PpgSample) => void;
-  flushPendingSamples: () => PpgSample[];
-  setAnalysisResult: (result: PpgAnalysisResult) => void;
+  pushResult: (result: SensorResult) => void;
   resetSession: () => void;
 }
 
-const BUFFER_MAX = 200;
+const HISTORY_MAX = 20;
 
-export const usePpgStore = create<PpgState>((set, get) => ({
-  // Initial hardware state
+export const usePpgStore = create<PpgState>((set) => ({
   bleState: 'disconnected',
   connectedDeviceId: null,
   connectedDeviceName: null,
-
-  // Initial data
-  ppgBuffer: [],
-  bufferMaxSize: BUFFER_MAX,
-  heartRate: null,
-  hrvRmssd: null,
-  stressLevel: null,
-  stressScore: null,
   latestResult: null,
-  pendingSamples: [],
+  resultHistory: [],
 
-  // ── BLE actions ──────────────────────────────────────────
   setBleState: (state) => set({ bleState: state }),
 
   setConnectedDevice: (id, name) =>
     set({ connectedDeviceId: id, connectedDeviceName: name }),
 
-  // ── Data actions ─────────────────────────────────────────
-  pushSample: (sample) =>
+  /**
+   * ESP32'den gelen her yeni JSON sonucunu kaydeder.
+   * resultHistory'yi son HISTORY_MAX kayıtla sınırlar.
+   */
+  pushResult: (result) =>
     set((s) => {
-      // Ring buffer: keep only the latest BUFFER_MAX samples
-      const next = [...s.ppgBuffer, sample];
-      const trimmed = next.length > BUFFER_MAX ? next.slice(next.length - BUFFER_MAX) : next;
+      const next = [...s.resultHistory, result];
       return {
-        ppgBuffer: trimmed,
-        pendingSamples: [...s.pendingSamples, sample],
+        latestResult: result,
+        resultHistory: next.length > HISTORY_MAX
+          ? next.slice(next.length - HISTORY_MAX)
+          : next,
       };
-    }),
-
-  // Returns and clears the pending accumulator (called by HardwareService before API post)
-  flushPendingSamples: () => {
-    const { pendingSamples } = get();
-    set({ pendingSamples: [] });
-    return pendingSamples;
-  },
-
-  setAnalysisResult: (result) =>
-    set({
-      heartRate: result.heart_rate,
-      hrvRmssd: result.hrv_rmssd,
-      stressLevel: result.stress_level,
-      stressScore: result.stress_score,
-      latestResult: result,
     }),
 
   resetSession: () =>
     set({
-      ppgBuffer: [],
-      pendingSamples: [],
-      heartRate: null,
-      hrvRmssd: null,
-      stressLevel: null,
-      stressScore: null,
       latestResult: null,
+      resultHistory: [],
     }),
 }));

@@ -86,7 +86,10 @@ function Bubble({ message }: BubbleProps) {
 
 export default function AIChatScreen() {
   const user = useAuthStore((s) => s.user);
-  const { stressLevel, heartRate, hrvRmssd } = usePpgStore();
+  const { latestResult } = usePpgStore();
+  const stressLevel = latestResult?.status ?? null;
+  const heartRate = latestResult?.hr ?? null;
+  const hrvRmssd = latestResult?.hrv ?? null;
 
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [inputText, setInputText] = useState('');

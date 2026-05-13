@@ -1,161 +1,91 @@
 /**
- * DemoService.ts
+ * DemoService.ts — Scenario B Demo Modu
  * ──────────────────────────────────────────────────────────────────────────
- * Gerçek PPG donanımı olmadan Dashboard'u test etmek için
- * gerçekçi sahte sinyal üretir.
+ * Gerçek ESP32 olmadan uygulama akışını test etmek için:
+ * Her 2 saniyede bir gerçekçi JSON sonuç paketi üretir.
  *
- * PPG dalga formu: Temel sinüs + küçük harmonik + rastgele gürültü
- * HR: 60–90 bpm arası yavaşça değişir
- * Stres seviyesi: ~30 saniyede bir rastgele değişir
+ * Yeni mimaride ESP32 TinyML modeli sonuçları üretiyor.
+ * Demo modu bunu simüle eder — ham PPG üretmez.
  */
 
-import { usePpgStore, PpgSample, StressLevel } from '../store/ppgStore';
+import { usePpgStore, SensorResult, StressLevel } from '../store/ppgStore';
 
 // ─── Sabitler ────────────────────────────────────────────────
+const UPDATE_INTERVAL_MS  = 2_000;   // 2 saniyede bir yeni sonuç
+const SCENARIO_DURATION   = 30_000;  // 30 sn'de bir senaryo değişir
 
-const TICK_INTERVAL_MS   = 10;   // 100 Hz simülasyon
-const STRESS_CYCLE_MS    = 30_000; // 30 sn'de bir stres değişimi
-const BATCH_INTERVAL_MS  = 5_000;  // 5 sn'de bir "analiz" sonucu
+// ─── Modül seviyesi durum ────────────────────────────────────
+let updateTimer:   ReturnType<typeof setInterval> | null = null;
+let scenarioTimer: ReturnType<typeof setInterval> | null = null;
+let isRunning = false;
+let scenarioIdx = 0;
 
-// ─── Modül düzeyinde durum ────────────────────────────────────
+// Stres senaryoları: (stresLevel, baseHR, baseHRV, scoreRange)
+const SCENARIOS: Array<{
+  status: StressLevel;
+  hr: [number, number];   // [min, max]
+  hrv: [number, number];  // [min, max]
+  score: [number, number];// [min, max]
+}> = [
+  { status: 'relaxed',  hr: [58, 68],  hrv: [55, 80], score: [10, 30] },
+  { status: 'moderate', hr: [72, 85],  hrv: [30, 50], score: [40, 65] },
+  { status: 'high',     hr: [88, 105], hrv: [10, 28], score: [70, 95] },
+  { status: 'moderate', hr: [75, 88],  hrv: [28, 45], score: [45, 68] },
+  { status: 'relaxed',  hr: [60, 70],  hrv: [50, 75], score: [12, 28] },
+];
 
-let tickTimer:   ReturnType<typeof setInterval> | null = null;
-let stressTimer: ReturnType<typeof setInterval> | null = null;
-let batchTimer:  ReturnType<typeof setInterval> | null = null;
-let phase = 0;         // sinüs faz açısı (radyan)
-let baseHR  = 72;      // anlık simüle kalp hızı (bpm)
-let targetHR = 72;
-let isActive = false;
-
-// ─── Sinyal üreteci ───────────────────────────────────────────
-
-/**
- * Gerçekçi PPG dalgası:
- *   sistol tepesi (dar) + diyakrotik çentik + diyastol çöküşü
- */
-function ppgWaveform(phase: number): number {
-  // Normalized 0–2π period
-  const t = ((phase % (2 * Math.PI)) / (2 * Math.PI));
-
-  // Ana sistol tepesi
-  const systole = Math.exp(-Math.pow((t - 0.2) / 0.07, 2));
-  // Diyakrotik çentik (daha küçük ikinci tepe)
-  const dicrotic = 0.3 * Math.exp(-Math.pow((t - 0.55) / 0.05, 2));
-  // Bazal drift
-  const drift = 0.05 * Math.sin(2 * Math.PI * t);
-  // Gürültü
-  const noise = (Math.random() - 0.5) * 0.04;
-
-  return Math.min(Math.max(systole + dicrotic + drift + noise, 0), 1);
+function rand(min: number, max: number): number {
+  return Math.round(min + Math.random() * (max - min));
 }
 
-// ─── Anlık metrikleri hesapla ─────────────────────────────────
-
-function computeSimulatedMetrics(stressLevel: StressLevel): {
-  heartRate: number;
-  hrvRmssd: number;
-  stressScore: number;
-} {
-  const hr = baseHR;
-  let hrv: number;
-  let score: number;
-
-  switch (stressLevel) {
-    case 'relaxed':
-      hrv   = 55 + Math.random() * 20;  // 55–75 ms
-      score = Math.round(10 + Math.random() * 25);
-      break;
-    case 'moderate':
-      hrv   = 30 + Math.random() * 20;  // 30–50 ms
-      score = Math.round(40 + Math.random() * 25);
-      break;
-    case 'high':
-      hrv   = 10 + Math.random() * 18;  // 10–28 ms
-      score = Math.round(70 + Math.random() * 25);
-      break;
-  }
-
-  return { heartRate: hr, hrvRmssd: hrv, stressScore: Math.min(score, 99) };
+function generateResult(): SensorResult {
+  const s = SCENARIOS[scenarioIdx % SCENARIOS.length];
+  return {
+    stress_score: rand(...s.score),
+    hr:           rand(...s.hr),
+    hrv:          rand(...s.hrv),
+    status:       s.status,
+    timestamp:    Date.now(),
+  };
 }
 
-// ─── Public API ───────────────────────────────────────────────
-
-const STRESS_SEQUENCE: StressLevel[] = ['relaxed', 'relaxed', 'moderate', 'high', 'moderate', 'relaxed'];
-let stressIdx = 0;
+// ─── Public API ──────────────────────────────────────────────
 
 const DemoService = {
   isRunning(): boolean {
-    return isActive;
+    return isRunning;
   },
 
   start(): void {
-    if (isActive) return;
-    isActive = true;
+    if (isRunning) return;
+    isRunning = true;
+    scenarioIdx = 0;
 
     const store = usePpgStore.getState();
     store.setBleState('connected');
     store.setConnectedDevice('DEMO-DEVICE', '🧪 Demo Sensör');
     store.resetSession();
 
-    phase    = 0;
-    baseHR   = 72;
-    targetHR = 72;
-    stressIdx = 0;
+    // İlk sonucu hemen gönder
+    store.pushResult(generateResult());
 
-    // ── Sinyal tick'i (100 Hz) ────────────────────────────────
-    tickTimer = setInterval(() => {
-      phase += (2 * Math.PI * baseHR) / 60 / 100; // frekans = HR/60 Hz
+    // Her 2 sn'de yeni sonuç
+    updateTimer = setInterval(() => {
+      usePpgStore.getState().pushResult(generateResult());
+    }, UPDATE_INTERVAL_MS);
 
-      // HR'yi yavaşça target'a yaklaştır (lerp)
-      baseHR += (targetHR - baseHR) * 0.001;
-
-      const sample: PpgSample = {
-        value:     ppgWaveform(phase),
-        timestamp: Date.now(),
-      };
-      usePpgStore.getState().pushSample(sample);
-    }, TICK_INTERVAL_MS);
-
-    // ── Stres döngüsü (30 sn) ────────────────────────────────
-    const applyStressChange = () => {
-      const stressLevel = STRESS_SEQUENCE[stressIdx % STRESS_SEQUENCE.length];
-      stressIdx++;
-
-      // HR'yi strese göre ayarla
-      switch (stressLevel) {
-        case 'relaxed':  targetHR = 60 + Math.random() * 15; break;
-        case 'moderate': targetHR = 75 + Math.random() * 15; break;
-        case 'high':     targetHR = 90 + Math.random() * 20; break;
-      }
-    };
-
-    applyStressChange(); // ilk uygulama hemen
-    stressTimer = setInterval(applyStressChange, STRESS_CYCLE_MS);
-
-    // ── Analiz batch'i (5 sn) ────────────────────────────────
-    batchTimer = setInterval(() => {
-      const level = STRESS_SEQUENCE[(stressIdx - 1) % STRESS_SEQUENCE.length];
-      const metrics = computeSimulatedMetrics(level);
-
-      usePpgStore.getState().setAnalysisResult({
-        session_id:   `demo-${Date.now()}`,
-        heart_rate:   Math.round(metrics.heartRate),
-        hrv_rmssd:    Math.round(metrics.hrvRmssd),
-        stress_level: level,
-        stress_score: metrics.stressScore,
-        confidence:   0.85 + Math.random() * 0.1,
-        analyzed_at:  new Date().toISOString(),
-      });
-    }, BATCH_INTERVAL_MS);
+    // Her 30 sn'de senaryo değişir
+    scenarioTimer = setInterval(() => {
+      scenarioIdx++;
+    }, SCENARIO_DURATION);
   },
 
   stop(): void {
-    if (!isActive) return;
-    isActive = false;
+    if (!isRunning) return;
+    isRunning = false;
 
-    if (tickTimer)   { clearInterval(tickTimer);   tickTimer   = null; }
-    if (stressTimer) { clearInterval(stressTimer); stressTimer = null; }
-    if (batchTimer)  { clearInterval(batchTimer);  batchTimer  = null; }
+    if (updateTimer)   { clearInterval(updateTimer);   updateTimer   = null; }
+    if (scenarioTimer) { clearInterval(scenarioTimer); scenarioTimer = null; }
 
     const store = usePpgStore.getState();
     store.setBleState('disconnected');
