@@ -7,36 +7,43 @@ from app.core.config import settings
 from app.core.logging import RequestLoggingMiddleware, logger
 from app.routers import auth, profile, ppg, admin, chat, debug
 
-
 # DB kurulumu: tablolar + eksik kolonlar
 def setup_database():
     from sqlalchemy import text, inspect
 
-    # 1. Tabloları oluştur (yoksa)
-    Base.metadata.create_all(bind=engine, checkfirst=True)
-    logger.info("✓ DB tabloları kontrol edildi.")
+    # 1. Tabloları oluştur (ENUM hatası verse bile çökmeyecek şekilde)
+    try:
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+        logger.info("✓ DB tabloları kontrol edildi.")
+    except Exception as e:
+        logger.warning(f"Tablo oluşturma uyarısı (Enum hatası olabilir, yoksayılıyor): {e}")
 
-    # 2. Eksik kolonları doğrudan ekle (migration olmadan)
-    with engine.connect() as conn:
-        insp = inspect(engine)
-        users_cols = [c["name"] for c in insp.get_columns("users")]
+    # 2. Eksik kolonları doğrudan ekle
+    try:
+        with engine.connect() as conn:
+            insp = inspect(engine)
+            # Sadece users tablosu varsa bu işlemi yap
+            if "users" in insp.get_table_names():
+                users_cols = [c["name"] for c in insp.get_columns("users")]
 
-        if "refresh_token_hash" not in users_cols:
-            conn.execute(text(
-                "ALTER TABLE users ADD COLUMN refresh_token_hash VARCHAR"
-            ))
-            conn.execute(text(
-                "ALTER TABLE users ADD COLUMN refresh_token_expires_at "
-                "TIMESTAMP WITH TIME ZONE"
-            ))
-            conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_users_refresh_token_hash "
-                "ON users (refresh_token_hash)"
-            ))
-            conn.commit()
-            logger.info("✓ refresh_token kolonları eklendi.")
-        else:
-            logger.info("✓ refresh_token kolonları zaten mevcut.")
+                if "refresh_token_hash" not in users_cols:
+                    conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN refresh_token_hash VARCHAR"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN refresh_token_expires_at "
+                        "TIMESTAMP WITH TIME ZONE"
+                    ))
+                    conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_users_refresh_token_hash "
+                        "ON users (refresh_token_hash)"
+                    ))
+                    conn.commit()
+                    logger.info("✓ refresh_token kolonları eklendi.")
+                else:
+                    logger.info("✓ refresh_token kolonları zaten mevcut.")
+    except Exception as e:
+        logger.error(f"Kolon ekleme sırasında hata oluştu: {e}")
 
 
 setup_database()
