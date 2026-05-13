@@ -1,0 +1,24 @@
+app/services/ppg_service.py:11: error: Library stubs not installed for "pandas"  [import-untyped]
+app/services/ppg_service.py:11: note: Hint: "python3 -m pip install pandas-stubs"
+app/services/ppg_service.py:12: error: Skipping analyzing "joblib": module is installed, but missing library stubs or py.typed marker  [import-untyped]
+app/services/ppg_service.py:91: error: Item "None" of "Any | None" has no attribute "__iter__" (not iterable)  [union-attr]
+app/services/ppg_service.py:100: error: Item "None" of "Any | None" has no attribute "predict_proba"  [union-attr]
+app/core/security.py:6: error: Library stubs not installed for "jose"  [import-untyped]
+app/core/security.py:6: note: Hint: "python3 -m pip install types-python-jose"
+app/core/security.py:7: error: Library stubs not installed for "passlib.context"  [import-untyped]
+app/core/security.py:7: note: Hint: "python3 -m pip install types-passlib"
+app/core/security.py:7: note: (or run "mypy --install-types" to install all missing stub packages)
+app/core/security.py:7: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports
+app/models/user.py:24: error: Need type annotation for "role"  [var-annotated]
+app/services/auth_service.py:64: error: Argument "user_id" to "write_audit" has incompatible type "Column[int]"; expected "int | None"  [arg-type]
+app/services/auth_service.py:71: error: Argument 2 to "verify_password" has incompatible type "Column[str]"; expected "str"  [arg-type]
+app/services/auth_service.py:81: error: Argument "user_id" to "write_audit" has incompatible type "Column[int]"; expected "int | None"  [arg-type]
+app/services/auth_service.py:99: error: Argument 1 to "int" has incompatible type "Any | None"; expected "str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc"  [arg-type]
+app/routers/ppg.py:89: error: Argument "saved_result_id" to "InferenceResponse" has incompatible type "Column[int] | None"; expected "int | None"  [arg-type]
+app/routers/auth.py:34: error: Incompatible types in assignment (expression has type "str", variable has type "Column[str]")  [assignment]
+app/routers/auth.py:35: error: Incompatible types in assignment (expression has type "datetime", variable has type "Column[datetime]")  [assignment]
+app/routers/auth.py:106: error: Incompatible types in assignment (expression has type "None", variable has type "Column[str]")  [assignment]
+app/routers/auth.py:107: error: Incompatible types in assignment (expression has type "None", variable has type "Column[datetime]")  [assignment]
+app/routers/auth.py:132: error: Incompatible types in assignment (expression has type "None", variable has type "Column[str]")  [assignment]
+app/routers/auth.py:133: error: Incompatible types in assignment (expression has type "None", variable has type "Column[datetime]")  [assignment]
+Found 18 errors in 6 files (checked 22 source files)

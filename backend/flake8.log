@@ -1,0 +1,131 @@
+app/core/config.py:46:80: E501 line too long (80 > 79 characters)
+app/core/database.py:6:80: E501 line too long (89 > 79 characters)
+app/core/logging.py:11:80: E501 line too long (84 > 79 characters)
+app/core/logging.py:38:80: E501 line too long (80 > 79 characters)
+app/core/security.py:28:80: E501 line too long (86 > 79 characters)
+app/core/security.py:36:80: E501 line too long (80 > 79 characters)
+app/core/security.py:39:80: E501 line too long (83 > 79 characters)
+app/core/security.py:44:80: E501 line too long (86 > 79 characters)
+app/core/security.py:66:14: E221 multiple spaces before operator
+app/core/security.py:66:80: E501 line too long (81 > 79 characters)
+app/core/security.py:68:80: E501 line too long (87 > 79 characters)
+app/main.py:1:1: F401 'logging' imported but unused
+app/models/user.py:29:23: E221 multiple spaces before operator
+app/models/user.py:32:80: E501 line too long (88 > 79 characters)
+app/models/user.py:33:16: E221 multiple spaces before operator
+app/models/user.py:34:18: E221 multiple spaces before operator
+app/models/user.py:35:15: E221 multiple spaces before operator
+app/models/user.py:42:80: E501 line too long (82 > 79 characters)
+app/models/user.py:44:15: E221 multiple spaces before operator
+app/models/user.py:45:14: E221 multiple spaces before operator
+app/models/user.py:46:14: E221 multiple spaces before operator
+app/models/user.py:47:11: E221 multiple spaces before operator
+app/models/user.py:48:14: E221 multiple spaces before operator
+app/models/user.py:49:16: E221 multiple spaces before operator
+app/models/user.py:50:14: E221 multiple spaces before operator
+app/models/user.py:51:18: E221 multiple spaces before operator
+app/models/user.py:53:15: E221 multiple spaces before operator
+app/models/user.py:53:80: E501 line too long (128 > 79 characters)
+app/models/user.py:61:7: E221 multiple spaces before operator
+app/models/user.py:62:12: E221 multiple spaces before operator
+app/models/user.py:63:13: E221 multiple spaces before operator
+app/models/user.py:64:15: E221 multiple spaces before operator
+app/models/user.py:65:18: E221 multiple spaces before operator
+app/models/user.py:67:12: E221 multiple spaces before operator
+app/models/user.py:68:9: E221 multiple spaces before operator
+app/models/user.py:69:10: E221 multiple spaces before operator
+app/models/user.py:70:12: E221 multiple spaces before operator
+app/models/user.py:71:18: E221 multiple spaces before operator
+app/models/user.py:72:10: E221 multiple spaces before operator
+app/models/user.py:73:15: E221 multiple spaces before operator
+app/models/user.py:73:80: E501 line too long (81 > 79 characters)
+app/models/user.py:81:7: E221 multiple spaces before operator
+app/models/user.py:82:12: E221 multiple spaces before operator
+app/models/user.py:83:9: E221 multiple spaces before operator
+app/models/user.py:84:12: E221 multiple spaces before operator
+app/models/user.py:94:7: E221 multiple spaces before operator
+app/models/user.py:95:12: E221 multiple spaces before operator
+app/models/user.py:96:11: E221 multiple spaces before operator
+app/models/user.py:96:80: E501 line too long (92 > 79 characters)
+app/models/user.py:97:13: E221 multiple spaces before operator
+app/models/user.py:99:15: E221 multiple spaces before operator
+app/models/user.py:100:15: E221 multiple spaces before operator
+app/routers/admin.py:3:1: F401 'typing.List' imported but unused
+app/routers/admin.py:19:80: E501 line too long (91 > 79 characters)
+app/routers/admin.py:22:80: E501 line too long (85 > 79 characters)
+app/routers/admin.py:109:69: E712 comparison to True should be 'if cond is True:' or 'if cond:'
+app/routers/admin.py:109:80: E501 line too long (85 > 79 characters)
+app/routers/admin.py:112:80: E501 line too long (97 > 79 characters)
+app/routers/auth.py:12:80: E501 line too long (87 > 79 characters)
+app/routers/auth.py:13:80: E501 line too long (88 > 79 characters)
+app/routers/auth.py:28:80: E501 line too long (86 > 79 characters)
+app/routers/auth.py:34:28: E221 multiple spaces before operator
+app/routers/auth.py:47:80: E501 line too long (85 > 79 characters)
+app/routers/auth.py:106:32: E221 multiple spaces before operator
+app/routers/auth.py:125:80: E501 line too long (90 > 79 characters)
+app/routers/auth.py:132:36: E221 multiple spaces before operator
+app/routers/chat.py:52:80: E501 line too long (87 > 79 characters)
+app/routers/chat.py:53:80: E501 line too long (82 > 79 characters)
+app/routers/chat.py:64:80: E501 line too long (97 > 79 characters)
+app/routers/debug.py:33:5: F841 local variable 'e' is assigned to but never used
+app/routers/debug.py:37:14: E221 multiple spaces before operator
+app/routers/debug.py:91:80: E501 line too long (85 > 79 characters)
+app/routers/debug.py:99:13: E741 ambiguous variable name 'l'
+app/routers/ppg.py:5:1: F401 'numpy as np' imported but unused
+app/routers/ppg.py:17:80: E501 line too long (95 > 79 characters)
+app/routers/ppg.py:47:80: E501 line too long (87 > 79 characters)
+app/routers/ppg.py:64:80: E501 line too long (82 > 79 characters)
+app/routers/ppg.py:135:6: W292 no newline at end of file
+app/routers/profile.py:18:80: E501 line too long (94 > 79 characters)
+app/routers/profile.py:30:80: E501 line too long (81 > 79 characters)
+app/routers/profile.py:31:80: E501 line too long (94 > 79 characters)
+app/routers/profile.py:41:19: W292 no newline at end of file
+app/services/auth_service.py:1:1: F401 'fastapi.Request' imported but unused
+app/services/auth_service.py:43:80: E501 line too long (85 > 79 characters)
+app/services/auth_service.py:49:80: E501 line too long (87 > 79 characters)
+app/services/auth_service.py:69:80: E501 line too long (93 > 79 characters)
+app/services/chat_service.py:7:80: E501 line too long (83 > 79 characters)
+app/services/chat_service.py:16:80: E501 line too long (85 > 79 characters)
+app/services/chat_service.py:19:80: E501 line too long (85 > 79 characters)
+app/services/chat_service.py:27:80: E501 line too long (87 > 79 characters)
+app/services/chat_service.py:29:80: E501 line too long (82 > 79 characters)
+app/services/chat_service.py:37:80: E501 line too long (91 > 79 characters)
+app/services/chat_service.py:43:80: E501 line too long (87 > 79 characters)
+app/services/chat_service.py:53:80: E501 line too long (80 > 79 characters)
+app/services/chat_service.py:55:80: E501 line too long (100 > 79 characters)
+app/services/chat_service.py:56:80: E501 line too long (80 > 79 characters)
+app/services/chat_service.py:61:80: E501 line too long (85 > 79 characters)
+app/services/chat_service.py:63:80: E501 line too long (82 > 79 characters)
+app/services/chat_service.py:65:80: E501 line too long (82 > 79 characters)
+app/services/ppg_service.py:8:1: F401 'typing.List' imported but unused
+app/services/ppg_service.py:20:80: E501 line too long (100 > 79 characters)
+app/services/ppg_service.py:21:80: E501 line too long (122 > 79 characters)
+app/services/ppg_service.py:22:80: E501 line too long (133 > 79 characters)
+app/services/ppg_service.py:23:80: E501 line too long (165 > 79 characters)
+app/services/ppg_service.py:42:80: E501 line too long (102 > 79 characters)
+app/services/ppg_service.py:50:21: E701 multiple statements on one line (colon)
+app/services/ppg_service.py:51:38: E701 multiple statements on one line (colon)
+app/services/ppg_service.py:59:27: E701 multiple statements on one line (colon)
+app/services/ppg_service.py:72:25: E221 multiple spaces before operator
+app/services/ppg_service.py:72:80: E501 line too long (112 > 79 characters)
+app/services/ppg_service.py:73:27: E221 multiple spaces before operator
+app/services/ppg_service.py:73:80: E501 line too long (114 > 79 characters)
+app/services/ppg_service.py:74:24: E221 multiple spaces before operator
+app/services/ppg_service.py:74:80: E501 line too long (111 > 79 characters)
+app/services/ppg_service.py:75:24: E221 multiple spaces before operator
+app/services/ppg_service.py:75:80: E501 line too long (111 > 79 characters)
+app/services/ppg_service.py:76:23: E221 multiple spaces before operator
+app/services/ppg_service.py:76:80: E501 line too long (110 > 79 characters)
+app/services/ppg_service.py:77:24: E221 multiple spaces before operator
+app/services/ppg_service.py:77:80: E501 line too long (111 > 79 characters)
+app/services/ppg_service.py:78:25: E221 multiple spaces before operator
+app/services/ppg_service.py:78:80: E501 line too long (112 > 79 characters)
+app/services/ppg_service.py:79:24: E221 multiple spaces before operator
+app/services/ppg_service.py:79:80: E501 line too long (111 > 79 characters)
+app/services/ppg_service.py:80:25: E221 multiple spaces before operator
+app/services/ppg_service.py:80:80: E501 line too long (116 > 79 characters)
+app/services/ppg_service.py:85:29: E221 multiple spaces before operator
+app/services/ppg_service.py:86:29: E221 multiple spaces before operator
+app/services/ppg_service.py:87:25: E221 multiple spaces before operator
+app/services/ppg_service.py:97:80: E501 line too long (86 > 79 characters)
+app/services/ppg_service.py:113:6: W292 no newline at end of file
