@@ -64,7 +64,7 @@ def list_ppg_outputs(
             "session_id": str(r.id),
             "heart_rate": r.mean_hr or 0,
             "hrv_rmssd": r.rmssd or 0,
-            "stress_level": "high" if r.y_pred_smooth == 1 else "relaxed",
+            "stress_level": "high" if r.y_pred_smooth == 2 else "moderate" if r.y_pred_smooth == 1 else "relaxed",
             "stress_score": round(r.p_stress * 100),
             "analyzed_at": r.created_at.isoformat(),
         }
@@ -109,5 +109,6 @@ def system_stats(
         "active_users":        db.query(User).filter(User.is_active == True).count(),
         "total_ppg_sessions":  db.query(PPGResult).count(),
         "total_chat_messages": db.query(ChatMessage).count(),
-        "high_stress_sessions": db.query(PPGResult).filter(PPGResult.y_pred_smooth == 1).count(),
+        "high_stress_sessions": db.query(PPGResult).filter(PPGResult.y_pred_smooth == 2).count(),
+        "moderate_stress_sessions": db.query(PPGResult).filter(PPGResult.y_pred_smooth == 1).count(),
     }

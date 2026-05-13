@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, Request, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.core.database import get_db
 from app.core.security import (
@@ -10,6 +12,8 @@ from app.core.security import (
     hash_refresh_token,
 )
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, UserResponse
+
+limiter = Limiter(key_func=get_remote_address)
 from app.services.auth_service import register_user, authenticate_user, get_current_user
 from app.models.user import User
 
@@ -44,6 +48,7 @@ def _issue_tokens(user: User, db: Session) -> TokenResponse:
 # ─── Endpoint'ler ─────────────────────────────────────────────
 
 @router.post("/register", response_model=UserResponse, status_code=201)
+@limiter.limit("5/minute")
 def register(data: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     """Yeni kullanıcı kaydı. Admin email listesindeyse role=admin atanır."""
     ip = request.client.host if request.client else None
@@ -51,6 +56,7 @@ def register(data: RegisterRequest, request: Request, db: Session = Depends(get_
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("10/minute")
 def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """
     Email/şifre ile giriş.
