@@ -39,6 +39,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "@sentry/react-native/expo",
       "react-native-ble-plx",
       [
         "expo-notifications",
@@ -60,7 +61,8 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "@sentry/react-native"
     ],
     "experiments": {
       "reactCompiler": true
