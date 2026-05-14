@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = __DEV__
-  ? 'http://192.168.111.4:8000'
-  : 'https://ppgdeneme2-production.up.railway.app';
+// Her zaman production Railway backend kullanılır.
+// Artık local IP eşleştirmesi gerekmez — laptop kapalıyken de, farklı ağda da çalışır.
+const BASE_URL = 'https://ppgdeneme2-production.up.railway.app';
 
 const TOKEN_KEY = 'sl_access_token';
 const REFRESH_TOKEN_KEY = 'sl_refresh_token';
