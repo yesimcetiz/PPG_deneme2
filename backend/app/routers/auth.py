@@ -2,18 +2,14 @@ from fastapi import APIRouter, Depends, Request, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
 from app.core.database import get_db
 from app.core.security import (
     create_access_token,
     generate_refresh_token,
     hash_refresh_token,
 )
+from app.core.limiter import limiter
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, UserResponse
-
-limiter = Limiter(key_func=get_remote_address)
 from app.services.auth_service import register_user, authenticate_user, get_current_user
 from app.models.user import User
 
