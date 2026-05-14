@@ -1,25 +1,20 @@
 /*
-  StressLess BLE Firmware
-  ========================
-  Mevcut v8 PPG/BPM motorunun üzerine BLE katmanı eklendi.
+  MAX30102 + MPU9250 + SSD1306 single-file pulse monitor
+  v8_reference_heartRate_engine_fast_bpm_python_stream
+  + BLE heuristic stress notification (ayrı kanal, Serial/OLED değişmedi)
 
-  Serial çıktısı (Python pipeline):
-    time_ms  ir  ppg  beat  bpm  avg_bpm  finger  ax  ay  az  accmag
-    → HİÇ DEĞİŞMEDİ. loggerUart.py / converter.py bozulmaz.
-
-  BLE katmanı:
-    Service UUID : 12345678-1234-1234-1234-1234567890ab
-    Char UUID    : 12345678-1234-1234-1234-1234567890ef
-    Device name  : StressLess
-    Her 15 sn'de bir (parmak var + BPM geçerli + min 8 RR intervali):
-      {"stress_score":42,"hr":73,"hrv":38,"status":"moderate","source":"heuristic"}
-
-  NOT: BLE skoru kural tabanlı RMSSD heuristiği. Mevcut Logistic Regression +
-  baseline-normalized robust9_z pipeline'ıyla aynı değildir; demo amaçlıdır.
+  BLE eklemesi:
+  - Service UUID : 12345678-1234-1234-1234-1234567890ab
+  - Char UUID    : 12345678-1234-1234-1234-1234567890ef
+  - Device name  : StressLess
+  - Her 15 sn'de bir JSON notification (parmak + BPM geçerli + min 8 RR):
+    {"stress_score":42,"hr":73,"hrv":38,"status":"moderate","source":"heuristic"}
+  - Serial çıktısı HİÇ DEĞİŞMEDİ — Python pipeline bozulmaz.
+  - OLED HİÇ DEĞİŞMEDİ.
 */
 
 // ============================================================
-// BLE kütüphaneleri — sadece bu blok yeni
+// *** YENİ: BLE kütüphaneleri ***
 // ============================================================
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -27,7 +22,7 @@
 #include <BLE2902.h>
 
 // ============================================================
-// Mevcut kütüphaneler (v8'den değişmedi)
+// Orijinal kütüphaneler (değişmedi)
 // ============================================================
 #include <Wire.h>
 #include <math.h>
@@ -37,13 +32,13 @@
 #include <Adafruit_SSD1306.h>
 
 // ============================================================
-// ESP32 I2C pins (değişmedi)
+// ESP32 I2C pins
 // ============================================================
 #define SDA_PIN 10
 #define SCL_PIN 11
 
 // ============================================================
-// OLED (değişmedi)
+// OLED SSD1306
 // ============================================================
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -59,7 +54,7 @@ unsigned long lastOledUpdateMs = 0;
 const unsigned long OLED_UPDATE_MS = 33;
 
 // ============================================================
-// MAX30102 (değişmedi)
+// MAX30102
 // ============================================================
 MAX30105 particleSensor;
 const byte LED_BRIGHTNESS = 0x3F;
@@ -75,7 +70,7 @@ unsigned long fingerOnTimeMs = 0;
 const unsigned long FINGER_SETTLE_MS = 500;
 
 // ============================================================
-// BPM motoru (değişmedi)
+// Heart-rate engine based on SparkFun heartRate.h
 // ============================================================
 const byte RATE_SIZE = 3;
 byte rates[RATE_SIZE] = {0};
@@ -106,8 +101,6 @@ float lastAcceptedRR = 0.0f;
 const float RR_MIN_MS = 315.0f;
 const float RR_MAX_MS = 1700.0f;
 const float MAX_RR_JUMP_FRAC = 0.55f;
-
-// BPM için küçük buffer (değişmedi — bozulmaz)
 const byte RR_BUF_SIZE = 5;
 float rrBuf[RR_BUF_SIZE] = {0};
 byte rrSpot = 0;
@@ -115,7 +108,7 @@ byte rrCount = 0;
 const float RR_MEDIAN_REJECT_FRAC = 0.45f;
 
 // ============================================================
-// PPG display kalite hesapları (değişmedi)
+// PPG display / quality calculations
 // ============================================================
 float dcEstimate = 0.0f;
 float ppgAc = 0.0f;
@@ -135,7 +128,7 @@ float qualityScore = 0.0f;
 unsigned long lastPpgProcessUs = 0;
 
 // ============================================================
-// MPU9250 (değişmedi)
+// MPU9250 I2C
 // ============================================================
 #define MPU9250_ADDR 0x68
 #define MPU_PWR_MGMT_1   0x6B
@@ -151,7 +144,10 @@ static const float ACCEL_SCALE_LSB_PER_G =
     (MPU_ACCEL_FS_SEL == 2) ?  4096.0f :
                               2048.0f;
 struct ImuSample {
-  float ax_g, ay_g, az_g, accMag_g;
+  float ax_g;
+  float ay_g;
+  float az_g;
+  float accMag_g;
   bool ok;
 };
 const byte ACC_BUF_SIZE = 25;
@@ -169,74 +165,53 @@ unsigned long lastImuUpdateMs = 0;
 const unsigned long IMU_UPDATE_MS = 20;
 
 // ============================================================
-// Serial debug (değişmedi)
+// Serial debug
 // ============================================================
 unsigned long lastSerialMs = 0;
 const unsigned long SERIAL_UPDATE_MS = 20;
 
 // ============================================================
-// *** YENİ: BLE UUID'leri — HardwareService.ts ile eşleşmeli ***
+// *** YENİ: BLE değişkenleri ***
 // ============================================================
 #define STRESS_SERVICE_UUID  "12345678-1234-1234-1234-1234567890ab"
 #define STRESS_CHAR_UUID     "12345678-1234-1234-1234-1234567890ef"
 
-// *** YENİ: BLE nesneleri ***
-BLEServer*         bleServer  = nullptr;
-BLECharacteristic* stressChar = nullptr;
+BLEServer*         bleServer   = nullptr;
+BLECharacteristic* stressChar  = nullptr;
 bool               bleConnected = false;
 
-// *** YENİ: RMSSD için AYRI büyük RR buffer (mevcut rrBuf[5]'e dokunulmaz) ***
-// ~20 atım ≈ 20 sn @ 60 BPM → daha kararlı RMSSD
+// RMSSD için ayrı buffer — mevcut rrBuf[5]'e dokunulmaz
 const byte BLE_RR_SIZE = 20;
 float bleRrBuf[BLE_RR_SIZE] = {0};
 byte  bleRrSpot  = 0;
 byte  bleRrCount = 0;
 
-// *** YENİ: BLE gönderim zamanlaması ***
-unsigned long lastBleSendMs    = 0;
-const unsigned long BLE_SEND_INTERVAL_MS = 15000;  // 15 sn
-const byte          BLE_MIN_RR_COUNT     = 8;       // en az 8 atım intervali
+unsigned long lastBleSendMs = 0;
+const unsigned long BLE_SEND_INTERVAL_MS = 15000;
+const byte          BLE_MIN_RR_COUNT     = 8;
 
-// ============================================================
-// *** YENİ: BLE server callback — bağlantı/ayrılma ***
-// ============================================================
 class StressServerCallbacks : public BLEServerCallbacks {
-  void onConnect(BLEServer*) override {
-    bleConnected = true;
-  }
+  void onConnect(BLEServer*)    override { bleConnected = true; }
   void onDisconnect(BLEServer*) override {
     bleConnected = false;
-    BLEDevice::startAdvertising();  // tekrar yayın yap
+    BLEDevice::startAdvertising();
   }
 };
 
-// ============================================================
-// *** YENİ: BLE başlatma ***
-// ============================================================
 void initBLE() {
   BLEDevice::init("StressLess");
   bleServer = BLEDevice::createServer();
   bleServer->setCallbacks(new StressServerCallbacks());
-
-  BLEService* service = bleServer->createService(STRESS_SERVICE_UUID);
-  stressChar = service->createCharacteristic(
-    STRESS_CHAR_UUID,
-    BLECharacteristic::PROPERTY_NOTIFY
-  );
+  BLEService* svc = bleServer->createService(STRESS_SERVICE_UUID);
+  stressChar = svc->createCharacteristic(STRESS_CHAR_UUID, BLECharacteristic::PROPERTY_NOTIFY);
   stressChar->addDescriptor(new BLE2902());
-  service->start();
-
+  svc->start();
   BLEAdvertising* adv = BLEDevice::getAdvertising();
   adv->addServiceUUID(STRESS_SERVICE_UUID);
   adv->setScanResponse(true);
   BLEDevice::startAdvertising();
-  Serial.println("# BLE hazir: StressLess yayinda");
 }
 
-// ============================================================
-// *** YENİ: RMSSD hesabı (BLE'ye özel buffer'dan) ***
-// Mevcut rrBuf[5] bpm motoru için; bu ayrı ve daha büyük.
-// ============================================================
 float computeBleRMSSD() {
   if (bleRrCount < 2) return 0.0f;
   byte n = bleRrCount;
@@ -246,55 +221,34 @@ float computeBleRMSSD() {
     rr[i] = bleRrBuf[idx];
   }
   float sumSqDiff = 0.0f;
-  for (byte i = 1; i < n; i++) {
-    float d = rr[i] - rr[i - 1];
-    sumSqDiff += d * d;
-  }
+  for (byte i = 1; i < n; i++) { float d = rr[i]-rr[i-1]; sumSqDiff += d*d; }
   return sqrtf(sumSqDiff / (float)(n - 1));
 }
 
-// ============================================================
-// *** YENİ: BLE JSON gönderimi ***
-// Serial çıktısına hiçbir şey eklenmez — tamamen ayrı kanal.
-// ============================================================
 void maybeSendBLE(unsigned long nowMs) {
-  if (!bleConnected)                              return;
-  if (!fingerPresent || !bpmValid)                return;
-  if (bleRrCount < BLE_MIN_RR_COUNT)              return;
+  if (!bleConnected || !fingerPresent || !bpmValid) return;
+  if (bleRrCount < BLE_MIN_RR_COUNT) return;
   if (nowMs - lastBleSendMs < BLE_SEND_INTERVAL_MS) return;
-
   lastBleSendMs = nowMs;
-
   float rmssd = computeBleRMSSD();
-
-  // Heuristic stres skoru: RMSSD ile ters orantılı
-  // 0 ms  → score 100 (yüksek stres)
-  // 80 ms → score   0 (rahat)
   float score = 100.0f - (rmssd / 80.0f) * 100.0f;
-  if (score < 0.0f)   score = 0.0f;
+  if (score < 0.0f) score = 0.0f;
   if (score > 100.0f) score = 100.0f;
-
   int scoreInt = (int)(score + 0.5f);
   int hrInt    = (int)(displayBpmF + 0.5f);
   int hrvInt   = (int)(rmssd + 0.5f);
-
-  const char* status;
-  if      (score < 35.0f) status = "relaxed";
-  else if (score < 65.0f) status = "moderate";
-  else                    status = "high";
-
-  // source:"heuristic" → mobil uygulamada ML çıktısıyla karıştırılmasın
+  const char* status = (score < 35.0f) ? "relaxed" : (score < 65.0f) ? "moderate" : "high";
   char json[160];
   snprintf(json, sizeof(json),
     "{\"stress_score\":%d,\"hr\":%d,\"hrv\":%d,\"status\":\"%s\",\"source\":\"heuristic\"}",
     scoreInt, hrInt, hrvInt, status);
-
   stressChar->setValue((uint8_t*)json, strlen(json));
   stressChar->notify();
 }
+// ============================================================ (BLE sonu)
 
 // ============================================================
-// I2C helpers (değişmedi)
+// I2C helpers
 // ============================================================
 bool writeByte(uint8_t devAddr, uint8_t regAddr, uint8_t data) {
   Wire.beginTransmission(devAddr);
@@ -316,7 +270,7 @@ bool readByte(uint8_t devAddr, uint8_t regAddr, uint8_t &data) {
 }
 
 // ============================================================
-// MPU9250 (değişmedi)
+// MPU9250
 // ============================================================
 bool initMPU9250() {
   uint8_t whoami = 0;
@@ -336,7 +290,8 @@ bool initMPU9250() {
   return true;
 }
 ImuSample readMPU9250Accel() {
-  ImuSample s = {0, 0, 0, 0, false};
+  ImuSample s;
+  s.ax_g = 0.0f; s.ay_g = 0.0f; s.az_g = 0.0f; s.accMag_g = 0.0f; s.ok = false;
   uint8_t raw[6];
   if (!readBytes(MPU9250_ADDR, MPU_ACCEL_XOUT_H, 6, raw)) return s;
   int16_t axRaw = (int16_t)((raw[0] << 8) | raw[1]);
@@ -345,7 +300,7 @@ ImuSample readMPU9250Accel() {
   s.ax_g = (float)axRaw / ACCEL_SCALE_LSB_PER_G;
   s.ay_g = (float)ayRaw / ACCEL_SCALE_LSB_PER_G;
   s.az_g = (float)azRaw / ACCEL_SCALE_LSB_PER_G;
-  s.accMag_g = sqrtf(s.ax_g*s.ax_g + s.ay_g*s.ay_g + s.az_g*s.az_g);
+  s.accMag_g = sqrtf(s.ax_g * s.ax_g + s.ay_g * s.ay_g + s.az_g * s.az_g);
   s.ok = true;
   return s;
 }
@@ -358,7 +313,7 @@ float computeAccStd(float newAccMag) {
   for (byte i = 0; i < n; i++) mean += accBuf[i];
   mean /= n;
   float var = 0.0f;
-  for (byte i = 0; i < n; i++) { float d = accBuf[i]-mean; var += d*d; }
+  for (byte i = 0; i < n; i++) { float d = accBuf[i] - mean; var += d * d; }
   var /= (n - 1);
   return sqrtf(var);
 }
@@ -378,7 +333,7 @@ void updateMotion(unsigned long nowMs) {
 }
 
 // ============================================================
-// Reset helpers (değişmedi + BLE buffer reset eklendi)
+// Reset helpers
 // ============================================================
 void resetWaveBuffer() {
   for (int i = 0; i < SCREEN_WIDTH; i++) waveBuffer[i] = 0.0f;
@@ -394,10 +349,9 @@ void resetBpmState() {
   rrSpot = 0; rrCount = 0;
   auxY2 = 0.0f; auxY1 = 0.0f; auxY0 = 0.0f;
   auxHistReady = false; lastAuxBeatMs = 0;
-  // *** YENİ: parmak kalktığında BLE RR buffer'ı da sıfırla ***
+  // *** YENİ: BLE buffer sıfırla (parmak kalktığında) ***
   for (byte i = 0; i < BLE_RR_SIZE; i++) bleRrBuf[i] = 0.0f;
-  bleRrSpot = 0; bleRrCount = 0;
-  lastBleSendMs = 0;
+  bleRrSpot = 0; bleRrCount = 0; lastBleSendMs = 0;
 }
 void resetPpgCalc() {
   dcEstimate = 0.0f; ppgAc = 0.0f; ppgDisplay = 0.0f;
@@ -408,7 +362,7 @@ void resetPpgCalc() {
 }
 
 // ============================================================
-// Finger detection (değişmedi)
+// Finger detection
 // ============================================================
 void updateFingerState(long irValue, unsigned long nowMs) {
   if (!fingerPresent) {
@@ -425,7 +379,7 @@ void updateFingerState(long irValue, unsigned long nowMs) {
 }
 
 // ============================================================
-// PPG quality / display calculation (değişmedi)
+// PPG quality / display calculation
 // ============================================================
 float alphaFromTau(float dtSec, float tauSec) {
   if (tauSec <= 0.0f) return 0.0f;
@@ -465,26 +419,29 @@ void updatePpgCalculations(long irValue) {
   if (ppgNorm > 2.5f) ppgNorm = 2.5f;
   if (ppgNorm < -2.5f) ppgNorm = -2.5f;
   ppgDisplay = -ppgNorm;
-  float qIr = (irValue >= FINGER_ON_THR) ? 35.0f : 0.0f;
-  float qPi = perfusionIndex * 25000.0f; if (qPi > 35.0f) qPi = 35.0f;
-  float qAc = acRange / 2.0f; if (qAc > 20.0f) qAc = 20.0f;
+  float qIr = 0.0f;
+  if (irValue >= FINGER_ON_THR) qIr = 35.0f;
+  float qPi = perfusionIndex * 25000.0f;
+  if (qPi > 35.0f) qPi = 35.0f;
+  float qAc = acRange / 2.0f;
+  if (qAc > 20.0f) qAc = 20.0f;
   float qMotion = motionOk ? 10.0f : 0.0f;
   qualityScore = qIr + qPi + qAc + qMotion;
   if (qualityScore > 100.0f) qualityScore = 100.0f;
 }
 
 // ============================================================
-// BPM — heartRate.h referans (değişmedi)
+// BPM using heartRate.h reference logic
 // ============================================================
 float medianOfArray(float *arr, byte n) {
   if (n == 0) return 0.0f;
   float tmp[RR_BUF_SIZE];
   for (byte i = 0; i < n; i++) tmp[i] = arr[i];
   for (byte i = 0; i < n; i++)
-    for (byte j = i+1; j < n; j++)
-      if (tmp[j] < tmp[i]) { float t=tmp[i]; tmp[i]=tmp[j]; tmp[j]=t; }
-  if (n & 1) return tmp[n/2];
-  return 0.5f * (tmp[(n/2)-1] + tmp[n/2]);
+    for (byte j = i + 1; j < n; j++)
+      if (tmp[j] < tmp[i]) { float t = tmp[i]; tmp[i] = tmp[j]; tmp[j] = t; }
+  if (n & 1) return tmp[n / 2];
+  return 0.5f * (tmp[(n / 2) - 1] + tmp[n / 2]);
 }
 float currentMedianRR() { return medianOfArray(rrBuf, rrCount); }
 void pushRR(float rrMs) {
@@ -500,7 +457,10 @@ bool rrAccepted(float rrMs) {
   }
   if (rrCount >= 3) {
     float medRR = currentMedianRR();
-    if (medRR > 0.0f && fabsf(rrMs-medRR)/medRR > RR_MEDIAN_REJECT_FRAC) return false;
+    if (medRR > 0.0f) {
+      float medJumpFrac = fabsf(rrMs - medRR) / medRR;
+      if (medJumpFrac > RR_MEDIAN_REJECT_FRAC) return false;
+    }
   }
   return true;
 }
@@ -509,12 +469,8 @@ void pushBpmFromRR(float rrMs) {
   if (rawBpm < BPM_MIN || rawBpm > BPM_MAX) return;
   instantBpm = rawBpm;
   pushRR(rrMs);
-
-  // *** YENİ: aynı kabul edilen RR'ı BLE buffer'ına da ekle ***
-  bleRrBuf[bleRrSpot++] = rrMs;
-  if (bleRrSpot >= BLE_RR_SIZE) bleRrSpot = 0;
-  if (bleRrCount < BLE_RR_SIZE) bleRrCount++;
-
+  // *** YENİ: tek ek satır — BLE buffer'ına da yaz ***
+  bleRrBuf[bleRrSpot++] = rrMs; if (bleRrSpot >= BLE_RR_SIZE) bleRrSpot = 0; if (bleRrCount < BLE_RR_SIZE) bleRrCount++;
   rates[rateSpot++] = (byte)(rawBpm + 0.5f);
   rateSpot %= RATE_SIZE;
   int sum = 0; byte count = 0;
@@ -537,9 +493,11 @@ bool updateHeartRateReference(long irValue, unsigned long nowMs) {
     beatLatchUntilMs = nowMs + BEAT_LATCH_MS;
     long delta = nowMs - lastBeatMs;
     lastBeatMs = nowMs;
-    if (delta > 0 && rrAccepted((float)delta)) {
-      lastAcceptedRR = (float)delta;
-      pushBpmFromRR((float)delta);
+    if (delta > 0) {
+      if (rrAccepted((float)delta)) {
+        lastAcceptedRR = (float)delta;
+        pushBpmFromRR((float)delta);
+      }
     }
   }
   lastBeatDetected = fingerPresent && (nowMs < beatLatchUntilMs);
@@ -547,24 +505,23 @@ bool updateHeartRateReference(long irValue, unsigned long nowMs) {
 }
 
 // ============================================================
-// Auxiliary beat marker (değişmedi)
+// Auxiliary beat marker for ML/export
 // ============================================================
 bool updateAuxBeatMarker(unsigned long nowMs) {
   if (!USE_AUX_BEAT_MARKER || !fingerPresent) return false;
   auxY2 = auxY1; auxY1 = auxY0; auxY0 = ppgDisplay;
   if (!auxHistReady) {
-    if (auxY2!=0.0f||auxY1!=0.0f||auxY0!=0.0f) auxHistReady = true;
+    if (auxY2 != 0.0f || auxY1 != 0.0f || auxY0 != 0.0f) auxHistReady = true;
     return false;
   }
   bool localPeak = (auxY1 > auxY2) && (auxY1 >= auxY0);
   bool amplitudeOk = auxY1 > AUX_PEAK_THR;
   unsigned long lastAnyBeatMs = lastBeatMs;
   if (lastAuxBeatMs > lastAnyBeatMs) lastAnyBeatMs = lastAuxBeatMs;
-  bool intervalOk = (lastAnyBeatMs==0)||((nowMs-lastAnyBeatMs)>=AUX_MIN_INTERVAL_MS);
-  bool notImmediatelyAfterRaw = (lastBeatMs==0)||((nowMs-lastBeatMs)>=AUX_MAX_AFTER_RAW_MS);
+  bool intervalOk = (lastAnyBeatMs == 0) || ((nowMs - lastAnyBeatMs) >= AUX_MIN_INTERVAL_MS);
+  bool notImmediatelyAfterRaw = (lastBeatMs == 0) || ((nowMs - lastBeatMs) >= AUX_MAX_AFTER_RAW_MS);
   bool qualityOk = qualityScore >= 35.0f;
-  bool auxBeat = localPeak && amplitudeOk && intervalOk &&
-                 notImmediatelyAfterRaw && motionOk && qualityOk;
+  bool auxBeat = localPeak && amplitudeOk && intervalOk && notImmediatelyAfterRaw && motionOk && qualityOk;
   if (auxBeat) {
     lastAuxBeatMs = nowMs;
     beatLatchUntilMs = nowMs + BEAT_LATCH_MS;
@@ -574,17 +531,20 @@ bool updateAuxBeatMarker(unsigned long nowMs) {
 }
 
 // ============================================================
-// OLED (değişmedi)
+// OLED — orijinalden hiç değişmedi
 // ============================================================
 void initOLED() {
   oledOk = display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
-  if (!oledOk) { Serial.println("WARNING: OLED not found."); return; }
+  if (!oledOk) {
+    Serial.println("WARNING: OLED not found. Continuing without display.");
+    return;
+  }
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
   display.setCursor(0, 0);
-  display.println("StressLess BLE");
-  display.println("Hazirlanıyor...");
+  display.println("PPG Monitor");
+  display.println("heartRate.h engine");
   display.display();
   delay(800);
   resetWaveBuffer();
@@ -604,49 +564,51 @@ void updateOLED(unsigned long nowMs) {
   display.setTextSize(1);
   display.setCursor(0, 0);
   display.print("BPM:");
-  if (fingerPresent && bpmValid) display.print((int)(displayBpmF+0.5f));
+  if (fingerPresent && bpmValid) display.print((int)(displayBpmF + 0.5f));
   else display.print("--");
   display.setCursor(74, 0);
   display.print("PI:");
-  display.print(perfusionIndex*100.0f, 3);
+  display.print(perfusionIndex * 100.0f, 3);
   display.print("%");
   display.setCursor(0, 10);
   display.print("Finger:");
   display.print(fingerPresent ? "OK" : "NO");
   display.setCursor(0, 20);
-  display.print("BLE:");
-  // *** YENİ: OLED'de BLE bağlantı durumu ***
-  display.print(bleConnected ? "BAGLI" : "Bekliyor");
-  const int heartX=112, heartY=22, r=3;
+  display.print("Motion:");
+  display.print(motionOk ? "OK" : "HIGH");
+  const int heartX = 112;
+  const int heartY = 22;
+  const int r = 3;
   if (lastBeatDetected) {
-    display.drawCircle(heartX-4,heartY-5,r,SSD1306_WHITE);
-    display.drawCircle(heartX+4,heartY-5,r,SSD1306_WHITE);
-    display.drawLine(heartX-7,heartY-2,heartX,heartY+6,SSD1306_WHITE);
-    display.drawLine(heartX+7,heartY-2,heartX,heartY+6,SSD1306_WHITE);
+    display.drawCircle(heartX - 4, heartY - 5, r, SSD1306_WHITE);
+    display.drawCircle(heartX + 4, heartY - 5, r, SSD1306_WHITE);
+    display.drawLine(heartX - 7, heartY - 2, heartX, heartY + 6, SSD1306_WHITE);
+    display.drawLine(heartX + 7, heartY - 2, heartX, heartY + 6, SSD1306_WHITE);
   } else {
-    display.fillCircle(heartX-4,heartY-5,r,SSD1306_WHITE);
-    display.fillCircle(heartX+4,heartY-5,r,SSD1306_WHITE);
-    display.fillTriangle(heartX-8,heartY-3,heartX+8,heartY-3,heartX,heartY+7,SSD1306_WHITE);
+    display.fillCircle(heartX - 4, heartY - 5, r, SSD1306_WHITE);
+    display.fillCircle(heartX + 4, heartY - 5, r, SSD1306_WHITE);
+    display.fillTriangle(heartX - 8, heartY - 3, heartX + 8, heartY - 3, heartX, heartY + 7, SSD1306_WHITE);
   }
-  display.drawLine(0,32,SCREEN_WIDTH-1,32,SSD1306_WHITE);
-  int prevX=0, prevY=WAVE_Y_TOP+WAVE_H/2;
-  for (int x=0;x<SCREEN_WIDTH;x++) {
-    int idx=(waveIndex+x)%SCREEN_WIDTH;
-    float s=waveBuffer[idx];
-    if (s>2.5f) s=2.5f; if (s<-2.5f) s=-2.5f;
-    float n01=(s+2.5f)/5.0f;
-    int y=WAVE_Y_TOP+WAVE_H-1-(int)(n01*(WAVE_H-1));
-    if (y<WAVE_Y_TOP) y=WAVE_Y_TOP;
-    if (y>WAVE_Y_TOP+WAVE_H-1) y=WAVE_Y_TOP+WAVE_H-1;
-    if (x>0) display.drawLine(prevX,prevY,x,y,SSD1306_WHITE);
-    prevX=x; prevY=y;
+  display.drawLine(0, 32, SCREEN_WIDTH - 1, 32, SSD1306_WHITE);
+  int prevX = 0;
+  int prevY = WAVE_Y_TOP + WAVE_H / 2;
+  for (int x = 0; x < SCREEN_WIDTH; x++) {
+    int idx = (waveIndex + x) % SCREEN_WIDTH;
+    float s = waveBuffer[idx];
+    if (s > 2.5f) s = 2.5f;
+    if (s < -2.5f) s = -2.5f;
+    float normalized01 = (s + 2.5f) / 5.0f;
+    int y = WAVE_Y_TOP + WAVE_H - 1 - (int)(normalized01 * (WAVE_H - 1));
+    if (y < WAVE_Y_TOP) y = WAVE_Y_TOP;
+    if (y > WAVE_Y_TOP + WAVE_H - 1) y = WAVE_Y_TOP + WAVE_H - 1;
+    if (x > 0) display.drawLine(prevX, prevY, x, y, SSD1306_WHITE);
+    prevX = x; prevY = y;
   }
   display.display();
 }
 
 // ============================================================
-// Serial debug — HİÇ DEĞİŞMEDİ
-// Python pipeline (loggerUart.py, converter.py) bozulmaz.
+// Serial debug — orijinalden hiç değişmedi
 // ============================================================
 void printSerial(unsigned long nowMs, long irValue, bool rawBeat, bool auxBeat) {
   if (nowMs - lastSerialMs < SERIAL_UPDATE_MS) return;
@@ -659,10 +621,10 @@ void printSerial(unsigned long nowMs, long irValue, bool rawBeat, bool auxBeat) 
       Serial.println("time_ms\tir\tppg\tbeat\tbpm\tavg_bpm\tfinger\tax\tay\taz\taccmag");
       headerPrinted = true;
     }
-    Serial.print(nowMs);          Serial.print('\t');
-    Serial.print(irValue);        Serial.print('\t');
-    Serial.print(ppgDisplay, 4);  Serial.print('\t');
-    Serial.print(beatForStream);  Serial.print('\t');
+    Serial.print(nowMs);         Serial.print('\t');
+    Serial.print(irValue);       Serial.print('\t');
+    Serial.print(ppgDisplay, 4); Serial.print('\t');
+    Serial.print(beatForStream); Serial.print('\t');
     Serial.print(bpmValid ? displayBpmF : 0.0f, 1); Serial.print('\t');
     Serial.print(bpmValid ? beatAvg : 0);            Serial.print('\t');
     Serial.print(fingerForStream);                   Serial.print('\t');
@@ -672,7 +634,6 @@ void printSerial(unsigned long nowMs, long irValue, bool rawBeat, bool auxBeat) 
     if (isnan(latestAccMag)) Serial.println("nan"); else Serial.println(latestAccMag, 4);
     return;
   }
-  // Arduino Serial Plotter debug (değişmedi)
   Serial.print("IR:"); Serial.print(irValue); Serial.print('\t');
   Serial.print("PPG_DISP:"); Serial.print(ppgDisplay, 3); Serial.print('\t');
   Serial.print("BEAT_MARK:"); Serial.print(lastBeatDetected ? 2.2f : 0.0f, 1); Serial.print('\t');
@@ -684,7 +645,7 @@ void printSerial(unsigned long nowMs, long irValue, bool rawBeat, bool auxBeat) 
   Serial.print("MOTION_OK:"); Serial.print(motionOk ? 1 : 0); Serial.print('\t');
   Serial.print("Q:"); Serial.print(qualityScore, 1); Serial.print('\t');
   Serial.print("AC_RANGE:"); Serial.print(acRange, 1); Serial.print('\t');
-  Serial.print("PI_X10000:"); Serial.print(perfusionIndex*10000.0f, 2); Serial.print('\t');
+  Serial.print("PI_X10000:"); Serial.print(perfusionIndex * 10000.0f, 2); Serial.print('\t');
   Serial.print("ACC_STD:"); Serial.println(accMagStd, 4);
 }
 
@@ -697,19 +658,29 @@ void setup() {
   Wire.begin(SDA_PIN, SCL_PIN);
   Wire.setClock(400000);
   initOLED();
-  initBLE();  // *** YENİ: BLE başlat ***
+  initBLE(); // *** YENİ: tek ek satır ***
+  if (!PYTHON_STREAM_FORMAT) {
+    Serial.println();
+    Serial.println("MAX30102 + MPU9250 pulse monitor using heartRate.h beat engine v8 fast BPM");
+    Serial.println("If compile fails: install SparkFun MAX3010x library; heartRate.h must be available.");
+  }
   if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) {
-    Serial.println("ERROR: MAX30102/MAX30105 not found.");
+    Serial.println("ERROR: MAX30102/MAX30105 not found. Check wiring and I2C pins.");
     while (1) delay(100);
   }
   particleSensor.setup(LED_BRIGHTNESS, SAMPLE_AVERAGE, LED_MODE, SAMPLE_RATE, PULSE_WIDTH, ADC_RANGE);
   particleSensor.setPulseAmplitudeRed(0x0A);
   particleSensor.setPulseAmplitudeIR(LED_BRIGHTNESS);
   if (!initMPU9250()) {
-    Serial.println("WARNING: MPU9250 init failed. Continuing.");
+    if (!PYTHON_STREAM_FORMAT) {
+      Serial.println("WARNING: MPU9250 not found / init failed. Continuing without hard stop.");
+    }
   }
   resetBpmState();
   resetPpgCalc();
+  if (!PYTHON_STREAM_FORMAT) {
+    Serial.println("Started.");
+  }
 }
 
 // ============================================================
@@ -746,6 +717,6 @@ void loop() {
   }
   lastBeatDetected = fingerPresent && (nowMs < beatLatchUntilMs);
   updateOLED(nowMs);
-  printSerial(nowMs, irValue, beat, auxBeat);  // Serial değişmedi
-  maybeSendBLE(nowMs);  // *** YENİ: BLE ayrı kanal ***
+  printSerial(nowMs, irValue, beat, auxBeat); // değişmedi
+  maybeSendBLE(nowMs); // *** YENİ: tek ek satır ***
 }

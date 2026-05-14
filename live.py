@@ -7,6 +7,8 @@ import joblib
 import numpy as np
 import pandas as pd
 import serial
+import serial.tools.list_ports
+import requests
 
 try:
     from scipy.signal import welch
@@ -18,8 +20,12 @@ except Exception:
 # ============================================================
 # CONFIG
 # ============================================================
-PORT = "/dev/cu.usbmodem5A7C1848531"   # macOS: change this
 BAUD = 115200
+
+# ── Railway backend ──────────────────────────────────────────
+RAILWAY_URL   = "https://ppgdeneme2-production.up.railway.app"
+LIVE_EMAIL    = "yesimcetiz@gmail.com"
+LIVE_PASSWORD = "Stres2024"
 
 MODEL_PATH = Path("stress_model_logreg_best.pkl")
 SEARCH_PATH = Path("LOSO_model_search_results.csv")
@@ -77,6 +83,70 @@ FEATURE_SETS = {
         "LF_power_log", "HF_power_log", "LFHF_log", "motion_z"
     ],
 }
+
+
+# ============================================================
+# PORT AUTO-DETECT
+# ============================================================
+def find_esp32_port() -> str:
+    """USB'deki ESP32 portunu otomatik bulur."""
+    keywords = ['usbmodem', 'usbserial', 'cp210', 'ch340', 'silicon', 'esp32']
+    for p in serial.tools.list_ports.comports():
+        combined = f"{p.device} {p.description} {p.hwid}".lower()
+        if any(kw in combined for kw in keywords):
+            print(f"✓ ESP32 portu bulundu: {p.device}")
+            return p.device
+    # Bulunamazsa mevcut portları listele
+    ports = [p.device for p in serial.tools.list_ports.comports()]
+    raise RuntimeError(
+        f"ESP32 bulunamadı. Mevcut portlar: {ports}\n"
+        "USB kablosunu kontrol edin ve tekrar deneyin."
+    )
+
+
+# ============================================================
+# RAILWAY API
+# ============================================================
+_railway_token: str | None = None
+
+def login_railway() -> bool:
+    global _railway_token
+    try:
+        r = requests.post(
+            f"{RAILWAY_URL}/auth/login",
+            json={"email": LIVE_EMAIL, "password": LIVE_PASSWORD},
+            timeout=10,
+        )
+        r.raise_for_status()
+        _railway_token = r.json()["access_token"]
+        print("✓ Railway login başarılı.")
+        return True
+    except Exception as e:
+        print(f"⚠ Railway login hatası: {e} — sonuçlar sadece terminale yazılacak.")
+        return False
+
+
+def post_to_railway(feat: dict, p_stress: float, y_smooth: int) -> None:
+    """ML sonucunu backend'e gönderir. Hata olursa sessizce geçer."""
+    if _railway_token is None:
+        return
+    score = max(0, min(100, round(p_stress * 100)))
+    level = "high" if score >= 65 else "moderate" if score >= 35 else "relaxed"
+    try:
+        requests.post(
+            f"{RAILWAY_URL}/ppg/log",
+            json={
+                "heart_rate":  round(float(feat.get("MeanHR", 0)), 1),
+                "hrv_rmssd":   round(float(feat.get("RMSSD", 0)), 1),
+                "stress_score": score,
+                "stress_level": level,
+                "device_id":   "live.py-ML",
+            },
+            headers={"Authorization": f"Bearer {_railway_token}"},
+            timeout=5,
+        )
+    except Exception as e:
+        print(f"⚠ Railway post hatası: {e}")
 
 
 # ============================================================
@@ -226,6 +296,11 @@ best_feature_set, best_features = load_best_feature_set(SEARCH_PATH)
 print(f"Best feature set: {best_feature_set}")
 print(f"Features: {best_features}")
 
+# Railway login (opsiyonel — başarısız olursa sadece terminal çıktısı)
+login_railway()
+
+# Serial port otomatik tespit
+PORT = find_esp32_port()
 print(f"Opening serial: {PORT} @ {BAUD}")
 ser = serial.Serial(PORT, BAUD, timeout=1)
 time.sleep(2)
@@ -390,12 +465,15 @@ try:
 
             window_log_rows.append(feat)
 
+            level = "high" if p_stress >= 0.65 else "moderate" if p_stress >= 0.35 else "relaxed"
             print(
                 f"[win {int(win_start)}] "
-                f"p={p_stress:.3f} raw={y_raw} smooth={y_smooth} | "
+                f"p={p_stress:.3f} raw={y_raw} smooth={y_smooth} [{level}] | "
                 f"HR={feat['MeanHR']:.1f} RMSSD={feat['RMSSD']:.1f} "
                 f"SDNN={feat['SDNN']:.1f} motion={feat['motion_std']:.4f}"
             )
+            # Railway'e gönder → mobil uygulamada görünür
+            post_to_railway(feat, p_stress, y_smooth)
 
 except KeyboardInterrupt:
     print("\nStopping...")

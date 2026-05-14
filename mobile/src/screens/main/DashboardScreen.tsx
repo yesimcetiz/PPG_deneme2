@@ -18,7 +18,7 @@ import { usePpgStore, StressLevel, SensorResult } from '../../store/ppgStore';
 import { useAuthStore } from '../../store/authStore';
 import HardwareService from '../../services/HardwareService';
 import DemoService from '../../services/DemoService';
-import { ppgApi } from '../../services/api';
+import { ppgApi, PpgSessionSummary } from '../../services/api';
 import { MainTabParamList } from '../../navigation/MainNavigator';
 import { Colors, FontSize, Radius, Shadow, Spacing } from '../../constants/theme';
 
@@ -190,6 +190,7 @@ export default function DashboardScreen() {
   const [isDemoRunning, setIsDemoRunning] = useState(false);
   const [isConnecting,  setIsConnecting]  = useState(false);
   const [showBanner,    setShowBanner]    = useState(false);
+  const [mlResult,      setMlResult]      = useState<PpgSessionSummary | null>(null);
 
   const bannerTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dismissTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -263,6 +264,28 @@ export default function DashboardScreen() {
   const handleBannerDismiss = useCallback(() => {
     setShowBanner(false);
     if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+  }, []);
+
+  // ─── ML sonucu polling (live.py → Railway → burada) ────────
+  useEffect(() => {
+    const fetchMlResult = async () => {
+      try {
+        const results = await ppgApi.history(1);
+        if (results && results.length > 0) {
+          const latest = results[0];
+          // Sadece son 10 dakika içindeki sonuçları göster
+          const ageMs = Date.now() - new Date(latest.analyzed_at).getTime();
+          if (ageMs < 10 * 60 * 1000) {
+            setMlResult(latest);
+          }
+        }
+      } catch {
+        // sessizce geç — live.py çalışmıyorsa normal
+      }
+    };
+    fetchMlResult();
+    const interval = setInterval(fetchMlResult, 10_000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -341,6 +364,32 @@ export default function DashboardScreen() {
               color={Colors.primaryMid}
             />
           </View>
+
+          {/* ── ML Model Analizi (live.py çalışınca görünür) ── */}
+          {mlResult && (() => {
+            const cfg = STRESS_CONFIG[mlResult.stress_level];
+            return (
+              <View style={[styles.mlCard, Shadow.sm]}>
+                <View style={styles.mlHeader}>
+                  <Text style={styles.mlTitle}>🧠 ML Model Analizi</Text>
+                  <Text style={styles.mlTime}>
+                    {new Date(mlResult.analyzed_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+                <View style={styles.mlBody}>
+                  <View style={[styles.mlBadge, { backgroundColor: cfg.bgColor }]}>
+                    <Text style={{ fontSize: 18 }}>{cfg.emoji}</Text>
+                    <Text style={[styles.mlBadgeText, { color: cfg.gradientStart }]}>{cfg.label}</Text>
+                  </View>
+                  <View style={styles.mlStats}>
+                    <Text style={styles.mlStat}>Skor: <Text style={{ fontWeight: '700' }}>{mlResult.stress_score}/100</Text></Text>
+                    <Text style={styles.mlStat}>HR: <Text style={{ fontWeight: '700' }}>{mlResult.heart_rate} bpm</Text></Text>
+                    <Text style={styles.mlStat}>HRV: <Text style={{ fontWeight: '700' }}>{mlResult.hrv_rmssd} ms</Text></Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })()}
 
           {/* ── Geçmiş ── */}
           <HistoryBar history={resultHistory} />
@@ -444,6 +493,17 @@ const styles = StyleSheet.create({
   metricUnit:  { fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: 3 },
 
   // Geçmiş
+  // ML kart
+  mlCard: { backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg },
+  mlHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
+  mlTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  mlTime: { fontSize: FontSize.xs, color: Colors.textMuted },
+  mlBody: { flexDirection: 'row', alignItems: 'center', gap: Spacing.lg },
+  mlBadge: { borderRadius: Radius.lg, paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, alignItems: 'center', gap: 4 },
+  mlBadgeText: { fontSize: FontSize.xs, fontWeight: '600' },
+  mlStats: { gap: 4, flex: 1 },
+  mlStat: { fontSize: FontSize.xs, color: Colors.textMuted },
+
   historyCard: {
     backgroundColor: Colors.white, borderRadius: Radius.lg,
     padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border,
