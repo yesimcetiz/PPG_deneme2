@@ -1,19 +1,27 @@
 import logging
+import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.database import engine, Base
 from app.core.config import settings
 from app.core.logging import RequestLoggingMiddleware, logger
+from app.core.limiter import limiter
 from app.routers import auth, profile, ppg, admin, chat, debug
 
-# Rate limiter — IP bazlı
-limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+# ─── Sentry ──────────────────────────────────────────────────────────────────
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.ENVIRONMENT,   # "production" veya "development"
+        traces_sample_rate=0.2,             # %20 performans tracing
+        send_default_pii=False,             # Kişisel veri gönderme
+    )
+    logger.info("✓ Sentry bağlandı.")
 
 # DB kurulumu: tablolar + eksik kolonlar
 def setup_database():
