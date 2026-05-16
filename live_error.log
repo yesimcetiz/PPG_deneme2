@@ -1,0 +1,44 @@
+Traceback (most recent call last):
+  File "/Users/yesim.cetiz/PPG_deneme2/live.py", line 9, in <module>
+    import serial
+ModuleNotFoundError: No module named 'serial'
+Traceback (most recent call last):
+  File "/Users/yesim.cetiz/PPG_deneme2/live.py", line 9, in <module>
+    import serial
+ModuleNotFoundError: No module named 'serial'
+Traceback (most recent call last):
+  File "/Users/yesim.cetiz/PPG_deneme2/live.py", line 9, in <module>
+    import serial
+ModuleNotFoundError: No module named 'serial'
+Traceback (most recent call last):
+  File "/Users/yesim.cetiz/PPG_deneme2/live.py", line 9, in <module>
+    import serial
+ModuleNotFoundError: No module named 'serial'
+Traceback (most recent call last):
+  File "/Users/yesim.cetiz/PPG_deneme2/live.py", line 9, in <module>
+    import serial
+ModuleNotFoundError: No module named 'serial'
+/bin/bash: /Users/yesim.cetiz/PPG_deneme2/start_live.sh: No such file or directory
+/bin/bash: /Users/yesim.cetiz/PPG_deneme2/start_live.sh: No such file or directory
+Traceback (most recent call last):
+  File "/Users/yesim.cetiz/PPG_deneme2/live.py", line 400, in <module>
+    raise RuntimeError("Baseline finished but no valid baseline windows were created.")
+RuntimeError: Baseline finished but no valid baseline windows were created.
+Traceback (most recent call last):
+  File "/Users/yesim.cetiz/PPG_deneme2/live.py", line 329, in <module>
+    line = ser.readline().decode("utf-8", errors="ignore").strip()
+           ~~~~~~~~~~~~^^
+  File "/Users/yesim.cetiz/PPG_deneme2/venv/lib/python3.13/site-packages/serial/serialposix.py", line 595, in read
+    raise SerialException(
+        'device reports readiness to read but returned no data '
+        '(device disconnected or multiple access on port?)')
+serial.serialutil.SerialException: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+Traceback (most recent call last):
+  File "/Users/yesim.cetiz/PPG_deneme2/live.py", line 329, in <module>
+    line = ser.readline().decode("utf-8", errors="ignore").strip()
+           ~~~~~~~~~~~~^^
+  File "/Users/yesim.cetiz/PPG_deneme2/venv/lib/python3.13/site-packages/serial/serialposix.py", line 595, in read
+    raise SerialException(
+        'device reports readiness to read but returned no data '
+        '(device disconnected or multiple access on port?)')
+serial.serialutil.SerialException: device reports readiness to read but returned no data (device disconnected or multiple access on port?)

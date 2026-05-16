@@ -2,7 +2,7 @@
   "expo": {
     "name": "Stress Less",
     "slug": "stress-less",
-    "owner": "yesimcetiz",
+    "owner": "yesimcetiz1",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -70,7 +70,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "9baa6c36-9a6b-4679-98a5-ad76d6f8093f"
+        "projectId": "2c893c0d-ba43-49f9-8ca7-994a1c0a5f84"
       }
     }
   }

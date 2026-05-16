@@ -11,6 +11,7 @@ import HistoryScreen from '../screens/main/HistoryScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import EditProfileScreen from '../screens/main/EditProfileScreen';
 import AdminScreen from '../screens/main/AdminScreen';
+import BaselineCalibrationScreen from '../screens/main/BaselineCalibrationScreen';
 import { Colors, FontSize } from '../constants/theme';
 
 // ─── Tip listeleri ────────────────────────────────────────────
@@ -27,6 +28,7 @@ export type MainStackParamList = {
   Tabs: undefined;
   EditProfile: undefined;
   Admin: undefined;
+  BaselineCalibration: undefined;
 };
 
 const Tab   = createBottomTabNavigator<MainTabParamList>();
@@ -108,6 +110,14 @@ export default function MainNavigator() {
         name="Admin"
         component={AdminScreen}
         options={{ presentation: 'card' }}
+      />
+      <Stack.Screen
+        name="BaselineCalibration"
+        component={BaselineCalibrationScreen}
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
       />
     </Stack.Navigator>
   );

@@ -219,6 +219,51 @@ export const ppgApi = {
     request<PpgSessionSummary[]>(`/ppg/history?limit=${limit}`),
 };
 
+// ─── Baseline API ─────────────────────────────────────────────
+/**
+ * Bir kalibrasyon oturumunda toplanan verilerin istatistikleri.
+ * POST /ppg/baseline'a gönderilir.
+ */
+export interface BaselinePayload {
+  mean_nn_mean:    number;
+  mean_nn_std:     number;
+  sdnn_mean:       number;
+  sdnn_std:        number;
+  rmssd_mean:      number;
+  rmssd_std:       number;
+  mean_hr_mean:    number;
+  mean_hr_std:     number;
+  motion_std_mean: number;
+  motion_std_std:  number;
+}
+
+export interface BaselineResponse {
+  mean_nn_mean:    number | null;
+  mean_nn_std:     number | null;
+  sdnn_mean:       number | null;
+  sdnn_std:        number | null;
+  rmssd_mean:      number | null;
+  rmssd_std:       number | null;
+  mean_hr_mean:    number | null;
+  mean_hr_std:     number | null;
+  motion_std_mean: number | null;
+  motion_std_std:  number | null;
+  n_sessions:      number;
+  updated_at:      string | null;
+}
+
+export const baselineApi = {
+  /** Kayıtlı baseline'ı getir (yoksa 404 atar → catch ile handle et). */
+  get: () => request<BaselineResponse>('/ppg/baseline'),
+
+  /** Yeni oturum istatistiklerini blend ederek kaydet. */
+  update: (data: BaselinePayload) =>
+    request<BaselineResponse>('/ppg/baseline', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
 // ─── AI Chat Types & API ──────────────────────────────────────
 export interface ChatMessage {
   role: 'user' | 'assistant';

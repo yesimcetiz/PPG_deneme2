@@ -33,6 +33,7 @@ class User(Base):
     ppg_results    = relationship("PPGResult",     back_populates="user")
     chat_messages  = relationship("ChatMessage",   back_populates="user")
     audit_logs     = relationship("AuditLog",      back_populates="user")
+    baseline       = relationship("UserBaseline",  back_populates="user", uselist=False)
 
 
 class HealthProfile(Base):
@@ -73,6 +74,39 @@ class PPGResult(Base):
     created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="ppg_results")
+
+
+class UserBaseline(Base):
+    """Kullanıcının kişisel dinlenme baseline istatistikleri.
+    Her kullanıcı için tek satır (unique user_id).
+    Her ölçüm oturumunda blend edilerek güncellenir.
+    """
+    __tablename__ = "user_baselines"
+
+    id      = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+
+    # ── Ortalamalar ──────────────────────────────────────────
+    mean_nn_mean     = Column(Float, nullable=True)   # ms
+    sdnn_mean        = Column(Float, nullable=True)   # ms
+    rmssd_mean       = Column(Float, nullable=True)   # ms
+    mean_hr_mean     = Column(Float, nullable=True)   # bpm
+    motion_std_mean  = Column(Float, nullable=True)   # g
+
+    # ── Standart Sapmalar ────────────────────────────────────
+    mean_nn_std      = Column(Float, nullable=True)
+    sdnn_std         = Column(Float, nullable=True)
+    rmssd_std        = Column(Float, nullable=True)
+    mean_hr_std      = Column(Float, nullable=True)
+    motion_std_std   = Column(Float, nullable=True)
+
+    # ── Meta ─────────────────────────────────────────────────
+    n_sessions  = Column(Integer, default=0, nullable=False)
+    updated_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                         onupdate=lambda: datetime.now(timezone.utc))
+    created_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", back_populates="baseline")
 
 
 class ChatMessage(Base):

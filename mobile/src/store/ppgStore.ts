@@ -12,7 +12,9 @@ export type BleConnectionState =
 
 /**
  * ESP32'den BLE üzerinden gelen JSON paketinin yapısı.
- * Örnek: {"stress_score": 72, "hr": 85, "hrv": 32, "status": "moderate"}
+ * Mevcut:  {"stress_score": 72, "hr": 85, "hrv": 32, "status": "moderate"}
+ * Güncel:  + "sdnn", "mean_nn", "motion", "source" alanları (firmware v2+)
+ * Yeni alanlar opsiyoneldir — eski firmware'lar çalışmaya devam eder.
  */
 export interface SensorResult {
   stress_score: number;   // 0–100
@@ -20,6 +22,11 @@ export interface SensorResult {
   hrv: number;            // RMSSD ms
   status: StressLevel;    // "relaxed" | "moderate" | "high"
   timestamp: number;      // ms epoch (cihaz zamanı veya alım zamanı)
+  // Firmware v2+ alanları (opsiyonel — baseline kalibrasyon için gerekli)
+  sdnn?: number;          // SDNN ms
+  mean_nn?: number;       // Ortalama RR aralığı ms
+  motion?: number;        // motion_std (ivmeölçer g cinsinden)
+  source?: string;        // "heuristic" | "ml"
 }
 
 export interface PpgState {

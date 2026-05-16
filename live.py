@@ -25,9 +25,20 @@ except Exception:
 BAUD = 115200
 
 # ── Railway backend ──────────────────────────────────────────
-RAILWAY_URL   = "https://ppgdeneme2-production.up.railway.app"
-LIVE_EMAIL    = "yesimcetiz@gmail.com"
-LIVE_PASSWORD = "Stres2024"
+RAILWAY_URL = "https://ppgdeneme2-production.up.railway.app"
+
+_USERS = {
+    "1": {"email": "yesimcetiz@gmail.com",  "password": "Stres2024", "name": "Yeşim"},
+    "2": {"email": "ezgidokk04@gmail.com",  "password": "Stres2024", "name": "Ezgi"},
+}
+print("\nKullanıcı seçin:")
+for k, v in _USERS.items():
+    print(f"  {k}) {v['name']}")
+_choice = input("Seçim (1/2): ").strip()
+_user = _USERS.get(_choice, _USERS["1"])
+LIVE_EMAIL    = _user["email"]
+LIVE_PASSWORD = _user["password"]
+print(f"✓ {_user['name']} olarak devam ediliyor.\n")
 
 MODEL_PATH = Path("stress_model_logreg_best.pkl")
 SEARCH_PATH = Path("LOSO_model_search_results.csv")

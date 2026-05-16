@@ -57,7 +57,7 @@ function parseCharacteristicValue(base64: string): SensorResult | null {
     const json = new TextDecoder('utf-8').decode(bytes);
     const data = JSON.parse(json);
 
-    // Alan doğrulaması
+    // Zorunlu alan doğrulaması
     if (
       typeof data.stress_score !== 'number' ||
       typeof data.hr           !== 'number' ||
@@ -78,6 +78,11 @@ function parseCharacteristicValue(base64: string): SensorResult | null {
       hrv:          Math.round(data.hrv),
       status,
       timestamp:    Date.now(),
+      // Firmware v2+ opsiyonel alanlar — varsa al, yoksa undefined kalır
+      sdnn:         typeof data.sdnn     === 'number' ? data.sdnn     : undefined,
+      mean_nn:      typeof data.mean_nn  === 'number' ? data.mean_nn  : undefined,
+      motion:       typeof data.motion   === 'number' ? data.motion   : undefined,
+      source:       typeof data.source   === 'string' ? data.source   : undefined,
     };
   } catch {
     return null; // JSON parse hatası — paketi yoksay

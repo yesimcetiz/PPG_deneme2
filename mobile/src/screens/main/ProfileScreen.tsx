@@ -208,6 +208,20 @@ export default function ProfileScreen() {
           />
         </Section>
 
+        {/* ── Baseline Kalibrasyon ── */}
+        <TouchableOpacity
+          style={styles.calibrateBtn}
+          onPress={() => navigation.navigate('BaselineCalibration')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="fitness-outline" size={18} color={Colors.primaryMid} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.calibrateBtnTitle}>Baseline Kalibrasyonu</Text>
+            <Text style={styles.calibrateBtnSub}>Kişisel dinlenme baseline'ını güncelle</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+        </TouchableOpacity>
+
         {/* ── Sign Out ── */}
         <TouchableOpacity
           style={styles.logoutBtn}
@@ -314,6 +328,28 @@ const styles = StyleSheet.create({
 
   center: { paddingVertical: Spacing.xl, alignItems: 'center' },
 
+  calibrateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    backgroundColor: Colors.white,
+    ...Shadow.sm,
+  },
+  calibrateBtnTitle: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  calibrateBtnSub: {
+    fontSize: FontSize.xs,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
