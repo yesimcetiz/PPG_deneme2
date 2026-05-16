@@ -8,7 +8,9 @@
   - Char UUID    : 12345678-1234-1234-1234-1234567890ef
   - Device name  : StressLess
   - Her 15 sn'de bir JSON notification (parmak + BPM geçerli + min 8 RR):
-    {"stress_score":42,"hr":73,"hrv":38,"status":"moderate","source":"heuristic"}
+    {"stress_score":42,"hr":73,"hrv":38,"sdnn":45.2,"mean_nn":820.5,"motion":0.0120,
+     "status":"moderate","source":"heuristic"}
+  - v2: sdnn, mean_nn (ms), motion (g) eklendi — mobil Firmware v1 fallback'leri devre dışı kalır
   - Serial çıktısı HİÇ DEĞİŞMEDİ — Python pipeline bozulmaz.
   - OLED HİÇ DEĞİŞMEDİ.
 */
@@ -212,17 +214,45 @@ void initBLE() {
   BLEDevice::startAdvertising();
 }
 
+// ── RR dizisini kronolojik sıraya al (tüm HRV fonksiyonları kullanır) ──
+static void getBleRrOrdered(float* out, byte n) {
+  for (byte i = 0; i < n; i++) {
+    byte idx = (bleRrSpot + BLE_RR_SIZE - n + i) % BLE_RR_SIZE;
+    out[i] = bleRrBuf[idx];
+  }
+}
+
 float computeBleRMSSD() {
   if (bleRrCount < 2) return 0.0f;
   byte n = bleRrCount;
   float rr[BLE_RR_SIZE];
-  for (byte i = 0; i < n; i++) {
-    byte idx = (bleRrSpot + BLE_RR_SIZE - n + i) % BLE_RR_SIZE;
-    rr[i] = bleRrBuf[idx];
-  }
+  getBleRrOrdered(rr, n);
   float sumSqDiff = 0.0f;
   for (byte i = 1; i < n; i++) { float d = rr[i]-rr[i-1]; sumSqDiff += d*d; }
   return sqrtf(sumSqDiff / (float)(n - 1));
+}
+
+float computeBleMeanNN() {
+  if (bleRrCount == 0) return 0.0f;
+  byte n = bleRrCount;
+  float rr[BLE_RR_SIZE];
+  getBleRrOrdered(rr, n);
+  float s = 0.0f;
+  for (byte i = 0; i < n; i++) s += rr[i];
+  return s / (float)n;
+}
+
+float computeBleSDNN() {
+  if (bleRrCount < 2) return 0.0f;
+  byte n = bleRrCount;
+  float rr[BLE_RR_SIZE];
+  getBleRrOrdered(rr, n);
+  float m = 0.0f;
+  for (byte i = 0; i < n; i++) m += rr[i];
+  m /= (float)n;
+  float var = 0.0f;
+  for (byte i = 0; i < n; i++) { float d = rr[i] - m; var += d * d; }
+  return sqrtf(var / (float)(n - 1));
 }
 
 void maybeSendBLE(unsigned long nowMs) {
@@ -230,18 +260,31 @@ void maybeSendBLE(unsigned long nowMs) {
   if (bleRrCount < BLE_MIN_RR_COUNT) return;
   if (nowMs - lastBleSendMs < BLE_SEND_INTERVAL_MS) return;
   lastBleSendMs = nowMs;
-  float rmssd = computeBleRMSSD();
+
+  float rmssd   = computeBleRMSSD();
+  float sdnn    = computeBleSDNN();
+  float mean_nn = computeBleMeanNN();
+  float motion  = accMagStd;   // MPU9250'den hesaplanan ivmeölçer std (g)
+
   float score = 100.0f - (rmssd / 80.0f) * 100.0f;
-  if (score < 0.0f) score = 0.0f;
+  if (score < 0.0f)   score = 0.0f;
   if (score > 100.0f) score = 100.0f;
-  int scoreInt = (int)(score + 0.5f);
-  int hrInt    = (int)(displayBpmF + 0.5f);
-  int hrvInt   = (int)(rmssd + 0.5f);
+
+  int   scoreInt = (int)(score   + 0.5f);
+  int   hrInt    = (int)(displayBpmF + 0.5f);
+  int   hrvInt   = (int)(rmssd   + 0.5f);   // RMSSD (ms) — tam sayı yeterli
   const char* status = (score < 35.0f) ? "relaxed" : (score < 65.0f) ? "moderate" : "high";
-  char json[160];
+
+  // JSON buffer: ~200 byte — sdnn/mean_nn ondalıklı (1 hane), motion 4 hane
+  char json[220];
   snprintf(json, sizeof(json),
-    "{\"stress_score\":%d,\"hr\":%d,\"hrv\":%d,\"status\":\"%s\",\"source\":\"heuristic\"}",
-    scoreInt, hrInt, hrvInt, status);
+    "{\"stress_score\":%d,\"hr\":%d,\"hrv\":%d,"
+    "\"sdnn\":%.1f,\"mean_nn\":%.1f,\"motion\":%.4f,"
+    "\"status\":\"%s\",\"source\":\"heuristic\"}",
+    scoreInt, hrInt, hrvInt,
+    sdnn, mean_nn, motion,
+    status);
+
   stressChar->setValue((uint8_t*)json, strlen(json));
   stressChar->notify();
 }
