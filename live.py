@@ -32,6 +32,54 @@ SEARCH_PATH = Path("LOSO_model_search_results.csv")
 
 SUBJECT_ID = "live_subject_01"
 
+# ── Kişisel baseline cache ────────────────────────────────────
+BASELINE_CACHE_MAX_AGE_DAYS = 30   # bu kadar günden eskiyse yok say
+BASELINE_CACHE_BLEND_WEIGHT = 0.6  # cache ağırlığı (0=sadece yeni, 1=sadece cache)
+
+def _cache_path(email: str) -> Path:
+    safe = email.replace("@", "_at_").replace(".", "_")
+    return Path(f"baseline_cache_{safe}.json")
+
+def load_baseline_cache(email: str):
+    """Cache varsa (base_means, base_stds, n_sessions) döner, yoksa None."""
+    import json
+    from datetime import datetime, timezone
+    p = _cache_path(email)
+    if not p.exists():
+        return None
+    try:
+        d = json.loads(p.read_text())
+        age_days = (datetime.now(timezone.utc) -
+                    datetime.fromisoformat(d["updated_at"])).days
+        if age_days > BASELINE_CACHE_MAX_AGE_DAYS:
+            print(f"[Cache] {age_days} gün eski, yok sayılıyor.")
+            return None
+        means = pd.Series(d["base_means"])
+        stds  = pd.Series(d["base_stds"]).clip(lower=1e-6)
+        n     = d.get("n_sessions", 1)
+        print(f"[Cache] Kişisel baseline yüklendi ({n} oturum, {age_days} gün önce).")
+        return means, stds, n
+    except Exception as e:
+        print(f"[Cache] Yüklenemedi: {e}")
+        return None
+
+def save_baseline_cache(email: str, means: pd.Series, stds: pd.Series, n_sessions: int):
+    """Baseline istatistiklerini cache dosyasına kaydeder."""
+    import json
+    from datetime import datetime, timezone
+    try:
+        d = {
+            "email": email,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "n_sessions": n_sessions,
+            "base_means": means.to_dict(),
+            "base_stds":  stds.to_dict(),
+        }
+        _cache_path(email).write_text(json.dumps(d, indent=2))
+        print(f"[Cache] Kişisel baseline kaydedildi ({n_sessions}. oturum).")
+    except Exception as e:
+        print(f"[Cache] Kaydedilemedi: {e}")
+
 # baseline capture duration
 BASELINE_SEC = 90.0
 
@@ -299,6 +347,9 @@ print(f"Features: {best_features}")
 # Railway login (opsiyonel — başarısız olursa sadece terminal çıktısı)
 login_railway()
 
+# ── Kişisel baseline cache yükle ─────────────────────────────
+_cached_baseline = load_baseline_cache(LIVE_EMAIL)  # (means, stds, n) veya None
+
 # Serial port otomatik tespit
 PORT = find_esp32_port()
 print(f"Opening serial: {PORT} @ {BAUD}")
@@ -410,6 +461,24 @@ try:
 
                 base_means = baseline_df[base_feature_cols].mean()
                 base_stds = baseline_df[base_feature_cols].std()
+
+                # ── Cache ile blend: önceki oturumların bilgisini koru ──
+                if _cached_baseline is not None:
+                    cached_means, cached_stds, n_prev = _cached_baseline
+                    w = BASELINE_CACHE_BLEND_WEIGHT
+                    # Sadece ortak kolonlar için blend
+                    common = [c for c in base_feature_cols if c in cached_means.index]
+                    if common:
+                        base_means[common] = w * cached_means[common] + (1 - w) * base_means[common]
+                        base_stds[common]  = w * cached_stds[common]  + (1 - w) * base_stds[common]
+                        base_stds = base_stds.clip(lower=1e-6)
+                        print(f"[Cache] Kişisel norm ile blend edildi (ağırlık={w}).")
+                    n_sessions = n_prev + 1
+                else:
+                    n_sessions = 1
+
+                # Bu oturumun baseline'ını cache'e kaydet (blend edilmiş hali)
+                save_baseline_cache(LIVE_EMAIL, base_means, base_stds, n_sessions)
 
                 baseline_done = True
                 print(f"Baseline ready. Valid baseline windows: {len(baseline_feature_rows)}")
