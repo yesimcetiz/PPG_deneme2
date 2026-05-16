@@ -2,6 +2,8 @@ from pathlib import Path
 from collections import deque
 import time
 import math
+import json
+import datetime
 
 import joblib
 import numpy as np
@@ -104,6 +106,10 @@ THR = 0.50
 SAVE_WINDOWS = True
 WINDOW_LOG_CSV = Path("live_windows_log.csv")
 
+# ── Kişisel baseline cache ────────────────────────────────────
+BASELINE_CACHE_MAX_AGE_DAYS = 30   # bu kadar günden eski cache görmezden gelinir
+BASELINE_CACHE_BLEND_WEIGHT = 0.6  # eski cache'e verilen ağırlık (0.4 = yeni oturum)
+
 
 # ============================================================
 # FEATURE SETS
@@ -131,6 +137,55 @@ FEATURE_SETS = {
         "LF_power_log", "HF_power_log", "LFHF_log", "motion_z"
     ],
 }
+
+
+# ============================================================
+# KİŞİSEL BASELINE CACHE
+# ============================================================
+def _cache_path(email: str) -> Path:
+    safe = email.replace("@", "_at_").replace(".", "_")
+    return Path(f"baseline_cache_{safe}.json")
+
+
+def load_baseline_cache(email: str):
+    """Kaydedilmiş kişisel baseline'ı yükler.
+    Returns (means_series, stds_series, n_sessions) veya None."""
+    p = _cache_path(email)
+    if not p.exists():
+        return None
+    try:
+        with open(p, "r") as f:
+            data = json.load(f)
+        saved_at = datetime.datetime.fromisoformat(data["saved_at"])
+        age_days = (datetime.datetime.utcnow() - saved_at).days
+        if age_days > BASELINE_CACHE_MAX_AGE_DAYS:
+            print(f"[Cache] Eski cache ({age_days} gün) — görmezden geliniyor.")
+            return None
+        means = pd.Series(data["means"])
+        stds  = pd.Series(data["stds"])
+        n     = int(data.get("n_sessions", 1))
+        print(f"[Cache] Kişisel baseline yüklendi ({n} oturum, {age_days} gün önce).")
+        return means, stds, n
+    except Exception as e:
+        print(f"[Cache] Yükleme hatası: {e} — görmezden geliniyor.")
+        return None
+
+
+def save_baseline_cache(email: str, means: pd.Series, stds: pd.Series, n_sessions: int):
+    """Baseline istatistiklerini JSON'a kaydeder."""
+    p = _cache_path(email)
+    try:
+        data = {
+            "saved_at": datetime.datetime.utcnow().isoformat(),
+            "n_sessions": n_sessions,
+            "means": means.to_dict(),
+            "stds":  stds.to_dict(),
+        }
+        with open(p, "w") as f:
+            json.dump(data, f, indent=2)
+        print(f"[Cache] Kişisel baseline kaydedildi ({n_sessions}. oturum).")
+    except Exception as e:
+        print(f"[Cache] Kaydetme hatası: {e}")
 
 
 # ============================================================
@@ -344,6 +399,9 @@ best_feature_set, best_features = load_best_feature_set(SEARCH_PATH)
 print(f"Best feature set: {best_feature_set}")
 print(f"Features: {best_features}")
 
+# Kişisel baseline cache yükle (varsa)
+_cached_baseline = load_baseline_cache(LIVE_EMAIL)
+
 # Railway login (opsiyonel — başarısız olursa sadece terminal çıktısı)
 login_railway()
 
@@ -460,7 +518,23 @@ try:
                 ]
 
                 base_means = baseline_df[base_feature_cols].mean()
-                base_stds = baseline_df[base_feature_cols].std()
+                base_stds  = baseline_df[base_feature_cols].std()
+
+                # ── Kişisel cache ile blend ──────────────────
+                if _cached_baseline is not None:
+                    cached_means, cached_stds, n_prev = _cached_baseline
+                    w = BASELINE_CACHE_BLEND_WEIGHT
+                    common = [c for c in base_feature_cols if c in cached_means.index]
+                    if common:
+                        base_means[common] = w * cached_means[common] + (1 - w) * base_means[common]
+                        base_stds[common]  = w * cached_stds[common]  + (1 - w) * base_stds[common]
+                        base_stds = base_stds.clip(lower=1e-6)
+                        print(f"[Cache] Önceki {n_prev} oturumla harmanlandı (ağırlık: {w}).")
+                    n_sessions = n_prev + 1
+                else:
+                    n_sessions = 1
+                save_baseline_cache(LIVE_EMAIL, base_means, base_stds, n_sessions)
+                # ────────────────────────────────────────────
 
                 # ── Cache ile blend: önceki oturumların bilgisini koru ──
                 if _cached_baseline is not None:

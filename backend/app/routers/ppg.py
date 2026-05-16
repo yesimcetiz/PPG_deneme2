@@ -90,7 +90,7 @@ def log_ppg_result(
 
     return {
         "session_id": str(result.id),
-        "analyzed_at": result.created_at.isoformat(),
+        "analyzed_at": result.created_at.isoformat() + "Z",
     }
 
 
@@ -175,7 +175,7 @@ def get_my_history(
             "hrv_rmssd":  round(r.rmssd or 0, 1),
             "stress_level": "high" if r.y_pred_smooth == 2 else "moderate" if r.y_pred_smooth == 1 else "relaxed",
             "stress_score": round(r.p_stress * 100),
-            "analyzed_at": r.created_at.isoformat(),
+            "analyzed_at": r.created_at.isoformat() + "Z",
         }
         for r in results
     ]
