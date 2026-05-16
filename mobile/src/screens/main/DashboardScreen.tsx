@@ -344,7 +344,7 @@ export default function DashboardScreen() {
             <View style={[styles.stressPlaceholder, Shadow.sm]}>
               <Ionicons name="pulse-outline" size={36} color={Colors.border} />
               <Text style={styles.placeholderText}>
-                {isConnected ? 'Sensörden veri bekleniyor…' : 'Sensörü bağla veya Demo Modunu başlat'}
+                {isConnected ? 'Sensörden veri bekleniyor…' : 'Sensörü bağlamak için Tara & Bağlan\'a bas'}
               </Text>
             </View>
           )}
@@ -395,22 +395,6 @@ export default function DashboardScreen() {
 
           {/* ── Geçmiş ── */}
           <HistoryBar history={resultHistory} />
-
-          {/* ── Demo Modu ── */}
-          <TouchableOpacity
-            style={[styles.demoBtn, isDemoRunning && styles.demoBtnActive]}
-            onPress={handleToggleDemo}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name={isDemoRunning ? 'stop-circle' : 'flask'}
-              size={16}
-              color={isDemoRunning ? Colors.white : Colors.primaryMid}
-            />
-            <Text style={[styles.demoBtnText, isDemoRunning && { color: Colors.white }]}>
-              {isDemoRunning ? 'Demo Durdur' : 'Demo Modunu Başlat (Donanımsız Test)'}
-            </Text>
-          </TouchableOpacity>
 
           {/* ── BLE Bağlantı ── */}
           <View style={[styles.deviceCard, Shadow.sm]}>
