@@ -116,6 +116,7 @@ THR = 0.50
 # optional logging
 SAVE_WINDOWS = True
 WINDOW_LOG_CSV = Path("live_windows_log.csv")
+ML_DETAIL_LOG  = Path("live_ml_detail.log")   # canlı, her pencerede flush
 
 # ── Kişisel baseline cache ────────────────────────────────────
 BASELINE_CACHE_MAX_AGE_DAYS = 30   # bu kadar günden eski cache görmezden gelinir
@@ -410,6 +411,20 @@ best_feature_set, best_features = load_best_feature_set(SEARCH_PATH)
 print(f"Best feature set: {best_feature_set}")
 print(f"Features: {best_features}")
 
+# ── ML detail log dosyasını aç (append, canlı flush) ────────
+_ml_log = open(ML_DETAIL_LOG, "a", buffering=1)  # buffering=1 → satır bazlı flush
+_ml_log.write(
+    f"\n{'='*70}\n"
+    f"SESSION START  {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    f"User: {LIVE_EMAIL}  |  Feature set: {best_feature_set}\n"
+    f"{'='*70}\n"
+)
+
+def _log(msg: str):
+    """Terminal + log dosyasına aynı anda yazar."""
+    print(msg)
+    _ml_log.write(msg + "\n")
+
 # Kişisel baseline cache yükle (varsa)
 _cached_baseline = load_baseline_cache(LIVE_EMAIL)
 
@@ -566,8 +581,12 @@ try:
                 save_baseline_cache(LIVE_EMAIL, base_means, base_stds, n_sessions)
 
                 baseline_done = True
-                print(f"Baseline ready. Valid baseline windows: {len(baseline_feature_rows)}")
-                print("Live predictions started.\n")
+                _log(f"Baseline ready. Valid baseline windows: {len(baseline_feature_rows)}")
+                _log("── Baseline means ──────────────────────────────────────")
+                for col in ["MeanNN","SDNN","RMSSD","MeanHR","motion_std"]:
+                    _log(f"  {col:15s}  mean={base_means[col]:8.2f}  std={base_stds[col]:8.4f}")
+                _log("────────────────────────────────────────────────────────")
+                _log("Live predictions started.\n")
             continue
 
         # live mode
@@ -619,12 +638,14 @@ try:
 
             window_log_rows.append(feat)
 
-            level = "high" if p_stress >= 0.65 else "moderate" if p_stress >= 0.35 else "relaxed"
-            print(
-                f"[win {int(win_start)}] "
-                f"p={p_stress:.3f} raw={y_raw} smooth={y_smooth} [{level}] | "
-                f"HR={feat['MeanHR']:.1f} RMSSD={feat['RMSSD']:.1f} "
-                f"SDNN={feat['SDNN']:.1f} motion={feat['motion_std']:.4f}"
+            level = "HIGH    " if p_stress >= 0.65 else "moderate" if p_stress >= 0.35 else "relaxed "
+            ts = datetime.datetime.now().strftime("%H:%M:%S")
+            _log(
+                f"[{ts}] p_stress={p_stress:.3f}  raw={y_raw}  smooth={y_smooth}  [{level}]\n"
+                f"         Ham   → HR={feat['MeanHR']:6.1f}  RMSSD={feat['RMSSD']:6.1f}"
+                f"  SDNN={feat['SDNN']:6.1f}  MeanNN={feat['MeanNN']:7.1f}  motion={feat['motion_std']:.4f}\n"
+                f"         Z-val → HR_z={feat['MeanHR_z']:+.2f}  RMSSD_z={feat['RMSSD_z']:+.2f}"
+                f"  SDNN_z={feat['SDNN_z']:+.2f}  MeanNN_z={feat['MeanNN_z']:+.2f}  motion_z={feat['motion_z']:+.2f}"
             )
             # Railway'e gönder → mobil uygulamada görünür
             post_to_railway(feat, p_stress, y_smooth)
@@ -638,3 +659,10 @@ finally:
     if SAVE_WINDOWS and len(window_log_rows) > 0:
         pd.DataFrame(window_log_rows).to_csv(WINDOW_LOG_CSV, index=False)
         print(f"Saved live window log: {WINDOW_LOG_CSV}")
+
+    _ml_log.write(
+        f"\nSESSION END  {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"  |  Total windows: {len(window_log_rows)}\n"
+    )
+    _ml_log.close()
+    print(f"Saved ML detail log: {ML_DETAIL_LOG}")
