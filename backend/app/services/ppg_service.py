@@ -111,3 +111,71 @@ def run_inference(windows, baseline) -> list:
         }
         for i in range(len(df_clean))
     ]
+
+
+def run_ble_inference(
+    hr: float,
+    rmssd: float,
+    sdnn: float,
+    mean_nn: float,
+    motion: float,
+    bl_mean_nn_mean: float,  bl_mean_nn_std: float,
+    bl_sdnn_mean: float,     bl_sdnn_std: float,
+    bl_rmssd_mean: float,    bl_rmssd_std: float,
+    bl_mean_hr_mean: float,  bl_mean_hr_std: float,
+    bl_motion_mean: float,   bl_motion_std: float,
+    recent_raw_preds: list,
+) -> dict:
+    """
+    ESP32 BLE'den gelen 5 feature ile ML inference çalıştırır.
+
+    Eksik robust9_z feature'ları normal dağılım varsayımıyla türetilir:
+      MedianNN ≈ MeanNN
+      IQRNN    ≈ 1.35 × SDNN
+      MADNN    ≈ 0.80 × SDNN
+      StdHR    ≈ (60000 / MeanNN²) × SDNN × 1000
+
+    Döner: {p_stress, y_pred_raw, y_pred_smooth, stress_level, stress_score, feature_set}
+    """
+    _load_model()
+
+    # ── Eksik feature türetme ────────────────────────────────
+    median_nn = mean_nn
+    iqr_nn    = 1.35 * sdnn
+    mad_nn    = 0.80 * sdnn
+    std_hr    = (60000.0 / max(mean_nn ** 2, 1.0)) * sdnn * 1000.0
+
+    # ── Z-normalize ──────────────────────────────────────────
+    feat_z = {
+        "MeanNN_z":     _safe_z(mean_nn,   bl_mean_nn_mean,               bl_mean_nn_std),
+        "MedianNN_z":   _safe_z(median_nn, bl_mean_nn_mean,               bl_mean_nn_std),
+        "SDNN_z":       _safe_z(sdnn,      bl_sdnn_mean,                  bl_sdnn_std),
+        "RMSSD_z":      _safe_z(rmssd,     bl_rmssd_mean,                 bl_rmssd_std),
+        "IQRNN_z":      _safe_z(iqr_nn,    (bl_sdnn_mean or 0.0) * 1.35,  (bl_sdnn_std or 1.0) * 1.35),
+        "MADNN_z":      _safe_z(mad_nn,    (bl_sdnn_mean or 0.0) * 0.80,  (bl_sdnn_std or 1.0) * 0.80),
+        "MeanHR_z":     _safe_z(hr,        bl_mean_hr_mean,               bl_mean_hr_std),
+        "StdHR_z":      _safe_z(std_hr,    0.0,                           1.0),
+        "motion_z":     _safe_z(motion,    bl_motion_mean,                bl_motion_std),
+        "LF_power_log": 0.0,
+        "HF_power_log": 0.0,
+        "LFHF_log":     0.0,
+    }
+
+    X = np.array([[feat_z[f] for f in _best_features]], dtype=float)
+
+    p_stress = float(_model.predict_proba(X)[0, 1])
+    y_raw    = int(p_stress >= THR)
+
+    history  = list(recent_raw_preds) + [y_raw]
+    y_smooth = int(_majority_smooth(history, k=K, m=M)[-1])
+
+    level = "high" if p_stress >= 0.65 else "moderate" if p_stress >= 0.35 else "relaxed"
+
+    return {
+        "p_stress":      round(p_stress, 4),
+        "y_pred_raw":    y_raw,
+        "y_pred_smooth": y_smooth,
+        "stress_level":  level,
+        "stress_score":  max(0, min(100, round(p_stress * 100))),
+        "feature_set":   _feature_set_name,
+    }
