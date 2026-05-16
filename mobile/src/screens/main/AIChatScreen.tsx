@@ -227,7 +227,7 @@ export default function AIChatScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       {/* ── Header ── */}
       <View style={styles.header}>
         <LinearGradient
@@ -450,7 +450,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-    paddingBottom: Platform.OS === 'ios' ? Spacing.lg : Spacing.md,
     gap: Spacing.sm,
     borderTopWidth: 1,
     borderTopColor: Colors.border,

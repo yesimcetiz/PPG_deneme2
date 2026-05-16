@@ -19,9 +19,9 @@ import { Colors, FontSize, Radius, Shadow, Spacing } from '../../constants/theme
 type BadgeConfig = { label: string; bg: string; text: string; icon: string };
 
 const STRESS_BADGE: Record<StressLevel, BadgeConfig> = {
-  relaxed:  { label: 'Relaxed',  bg: '#E1F5EE', text: '#1D9E75', icon: '😌' },
-  moderate: { label: 'Moderate', bg: '#FEF3C7', text: '#854F0B', icon: '😐' },
-  high:     { label: 'High',     bg: '#FEE2E2', text: '#B91C1C', icon: '😰' },
+  relaxed:  { label: 'Rahat',   bg: '#E1F5EE', text: '#1D9E75', icon: '😌' },
+  moderate: { label: 'Orta',    bg: '#FEF3C7', text: '#854F0B', icon: '😐' },
+  high:     { label: 'Yüksek',  bg: '#FEE2E2', text: '#B91C1C', icon: '😰' },
 };
 
 function StressBadge({ level }: { level: StressLevel }) {
@@ -83,7 +83,7 @@ export default function HistoryScreen() {
       const data = await ppgApi.history(50);
       setSessions(data);
     } catch {
-      setError('Could not load history. Pull down to retry.');
+      setError('Geçmiş yüklenemedi. Yenilemek için aşağı çekin.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -112,8 +112,8 @@ export default function HistoryScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Session History</Text>
-        <Text style={styles.subtitle}>{total} recorded session{total !== 1 ? 's' : ''}</Text>
+        <Text style={styles.title}>Ölçüm Geçmişi</Text>
+        <Text style={styles.subtitle}>{total} kayıtlı oturum</Text>
       </View>
 
       {/* Summary strip */}
@@ -121,19 +121,19 @@ export default function HistoryScreen() {
         <View style={styles.summaryStrip}>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>{total}</Text>
-            <Text style={styles.summaryLabel}>Sessions</Text>
+            <Text style={styles.summaryLabel}>Oturum</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>{avgHR ?? '--'}</Text>
-            <Text style={styles.summaryLabel}>Avg HR (bpm)</Text>
+            <Text style={styles.summaryLabel}>Ort. KH (bpm)</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, highStressPct && highStressPct > 40 ? { color: Colors.error } : {}]}>
               {highStressPct ?? '--'}%
             </Text>
-            <Text style={styles.summaryLabel}>High Stress</Text>
+            <Text style={styles.summaryLabel}>Yüksek Stres</Text>
           </View>
         </View>
       )}
@@ -147,14 +147,14 @@ export default function HistoryScreen() {
           <Ionicons name="cloud-offline-outline" size={40} color={Colors.border} />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity onPress={() => fetchHistory()} style={styles.retryBtn}>
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={styles.retryText}>Tekrar Dene</Text>
           </TouchableOpacity>
         </View>
       ) : total === 0 ? (
         <View style={styles.center}>
           <Ionicons name="bar-chart-outline" size={48} color={Colors.border} />
-          <Text style={styles.emptyText}>No sessions yet.</Text>
-          <Text style={styles.emptySubtext}>Connect a PPG sensor to start recording.</Text>
+          <Text style={styles.emptyText}>Henüz oturum yok.</Text>
+          <Text style={styles.emptySubtext}>Ölçüm başlatmak için PPG sensörünü bağlayın.</Text>
         </View>
       ) : (
         <FlatList
