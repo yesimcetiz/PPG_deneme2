@@ -273,9 +273,11 @@ export default function DashboardScreen() {
         const results = await ppgApi.history(1);
         if (results && results.length > 0) {
           const latest = results[0];
-          // Sadece son 10 dakika içindeki sonuçları göster
-          const ageMs = Date.now() - new Date(latest.analyzed_at).getTime();
-          if (ageMs < 10 * 60 * 1000) {
+          // Sadece son 30 dakika içindeki sonuçları göster
+          // analyzed_at UTC olduğundan 'Z' suffix ekliyoruz (timezone parse hatası önlenir)
+          const utcStr = latest.analyzed_at.endsWith('Z') ? latest.analyzed_at : latest.analyzed_at + 'Z';
+          const ageMs = Date.now() - new Date(utcStr).getTime();
+          if (ageMs < 30 * 60 * 1000) {
             setMlResult(latest);
           }
         }
