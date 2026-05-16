@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { BottomTabNavigationProp, useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { usePpgStore, StressLevel, SensorResult } from '../../store/ppgStore';
 import { useAuthStore } from '../../store/authStore';
 import HardwareService from '../../services/HardwareService';
@@ -183,6 +183,7 @@ function HealthCheckBanner({
 // ─── Ana ekran ───────────────────────────────────────────────
 
 export default function DashboardScreen() {
+  const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const user = useAuthStore((s) => s.user);
   const { bleState, connectedDeviceName, latestResult, resultHistory } = usePpgStore();
@@ -316,7 +317,7 @@ export default function DashboardScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, { paddingBottom: tabBarHeight }]} edges={['top']}>
       {/* ── Sağlık Hatırlatma Banner'ı ── */}
       {showBanner && (
         <HealthCheckBanner
@@ -325,7 +326,7 @@ export default function DashboardScreen() {
         />
       )}
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 96 }}
+        contentContainerStyle={{ paddingBottom: 16 }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.inner}>

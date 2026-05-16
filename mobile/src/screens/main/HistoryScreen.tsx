@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
   View,
   Text,
@@ -71,6 +72,7 @@ function SessionRow({ item }: { item: PpgSessionSummary }) {
 // ─── Main Screen ─────────────────────────────────────────────
 
 export default function HistoryScreen() {
+  const tabBarHeight = useBottomTabBarHeight();
   const [sessions, setSessions] = useState<PpgSessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,7 +111,7 @@ export default function HistoryScreen() {
     : null;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, { paddingBottom: tabBarHeight }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Ölçüm Geçmişi</Text>
@@ -161,7 +163,7 @@ export default function HistoryScreen() {
           data={sessions}
           keyExtractor={(item) => item.session_id}
           renderItem={({ item }) => <SessionRow item={item} />}
-          contentContainerStyle={[styles.list, { paddingBottom: 96 }]}
+          contentContainerStyle={[styles.list, { paddingBottom: 16 }]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

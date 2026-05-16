@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, RouteProp } from '@react-navigation/native';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { chatApi, profileApi, ChatMessage, HealthProfilePayload } from '../../services/api';
 import { usePpgStore } from '../../store/ppgStore';
 import { useAuthStore } from '../../store/authStore';
@@ -87,6 +88,7 @@ function Bubble({ message }: BubbleProps) {
 // ─── Main Screen ─────────────────────────────────────────────
 
 export default function AIChatScreen() {
+  const tabBarHeight = useBottomTabBarHeight();
   const route = useRoute<RouteProp<MainTabParamList, 'Chat'>>();
   const initialMessage = route.params?.initialMessage;
 
@@ -227,7 +229,7 @@ export default function AIChatScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safe, { paddingBottom: tabBarHeight }]} edges={['top']}>
       {/* ── Header ── */}
       <View style={styles.header}>
         <LinearGradient
@@ -249,7 +251,7 @@ export default function AIChatScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        keyboardVerticalOffset={tabBarHeight}
       >
         {/* ── Messages ── */}
         <FlatList
