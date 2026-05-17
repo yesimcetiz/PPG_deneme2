@@ -20,3 +20,12 @@ __pycache__/
 node_modules/
 mobile/.expo/
 mobile/dist/
+
+# Çalışma logları — git'te tutulmaz
+live_error.log
+live_output.log
+live_windows_log.csv
+ble_ml_detail.log
+backend/flake8.log
+backend/mypy.log
+baseline_cache_*.json
