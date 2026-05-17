@@ -303,9 +303,21 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* ── Stres Kartı ── */}
+          {/* ── Stres Kartı (ML sonucu) ── */}
           {stressCfg ? (
-            <StressGauge score={latestResult!.stress_score} config={stressCfg} />
+            <StressGauge score={latestMlResult!.stress_score} config={stressCfg} />
+          ) : mlLoading ? (
+            <View style={[styles.stressPlaceholder, Shadow.sm]}>
+              <ActivityIndicator size="large" color={Colors.primaryMid} />
+              <Text style={styles.placeholderText}>ML modeli analiz ediyor…</Text>
+            </View>
+          ) : needsBaseline ? (
+            <View style={[styles.stressPlaceholder, Shadow.sm]}>
+              <Ionicons name="analytics-outline" size={36} color="#F59E0B" />
+              <Text style={styles.placeholderText}>
+                {'Kişisel baseline gerekli.\nProfil → Baseline Kalibrasyonu yapın.'}
+              </Text>
+            </View>
           ) : (
             <View style={[styles.stressPlaceholder, Shadow.sm]}>
               <Ionicons name="pulse-outline" size={36} color={Colors.border} />

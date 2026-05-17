@@ -165,6 +165,7 @@ async function subscribeToResults(device: Device) {
       const result = parseCharacteristicValue(characteristic.value);
       if (result) {
         usePpgStore.getState().pushResult(result);
+        sendToMlPipeline(result);
       }
     },
   );
