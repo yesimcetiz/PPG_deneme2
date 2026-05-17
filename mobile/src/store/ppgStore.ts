@@ -29,6 +29,15 @@ export interface SensorResult {
   source?: string;        // "heuristic" | "ml"
 }
 
+/** Railway ML modelinden dönen analiz sonucu */
+export interface MlResult {
+  p_stress:     number;
+  stress_level: StressLevel;
+  stress_score: number;
+  session_id:   string;
+  analyzed_at:  string;
+}
+
 export interface PpgState {
   // BLE bağlantı durumu
   bleState: BleConnectionState;
@@ -45,6 +54,11 @@ export interface PpgState {
   setBleState: (state: BleConnectionState) => void;
   setConnectedDevice: (id: string | null, name: string | null) => void;
   pushResult: (result: SensorResult) => void;
+  setMlResult: (result: MlResult | null) => void;
+  setMlLoading: (loading: boolean) => void;
+  setMlResult:  (result)  => set({ latestMlResult: result, mlLoading: false }),
+  setMlLoading: (loading) => set({ mlLoading: loading }),
+
   resetSession: () => void;
 }
 
@@ -55,6 +69,8 @@ export const usePpgStore = create<PpgState>((set) => ({
   connectedDeviceId: null,
   connectedDeviceName: null,
   latestResult: null,
+  latestMlResult: null,
+  mlLoading: false,
   resultHistory: [],
 
   setBleState: (state) => set({ bleState: state }),
@@ -77,9 +93,14 @@ export const usePpgStore = create<PpgState>((set) => ({
       };
     }),
 
+  setMlResult:  (result)  => set({ latestMlResult: result, mlLoading: false }),
+  setMlLoading: (loading) => set({ mlLoading: loading }),
+
   resetSession: () =>
     set({
       latestResult: null,
+      latestMlResult: null,
+      mlLoading: false,
       resultHistory: [],
     }),
 }));

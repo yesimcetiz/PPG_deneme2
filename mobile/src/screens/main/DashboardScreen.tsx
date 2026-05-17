@@ -18,7 +18,7 @@ import { usePpgStore, StressLevel, SensorResult } from '../../store/ppgStore';
 import { useAuthStore } from '../../store/authStore';
 import HardwareService from '../../services/HardwareService';
 import DemoService from '../../services/DemoService';
-import { ppgApi, PpgSessionSummary } from '../../services/api';
+
 import { MainTabParamList } from '../../navigation/MainNavigator';
 import { Colors, FontSize, Radius, Shadow, Spacing } from '../../constants/theme';
 
@@ -186,16 +186,15 @@ export default function DashboardScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const user = useAuthStore((s) => s.user);
-  const { bleState, connectedDeviceName, latestResult, resultHistory } = usePpgStore();
+  const { bleState, connectedDeviceName, latestResult, resultHistory, latestMlResult, mlLoading } = usePpgStore();
 
   const [isDemoRunning, setIsDemoRunning] = useState(false);
   const [isConnecting,  setIsConnecting]  = useState(false);
   const [showBanner,    setShowBanner]    = useState(false);
-  const [mlResult,      setMlResult]      = useState<PpgSessionSummary | null>(null);
 
   const bannerTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dismissTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSavedTsRef   = useRef<number>(0);  // tekrar kayıt önleme
+  const lastShownSessionRef = useRef<string | null>(null);
 
   const isConnected = bleState === 'connected';
 
@@ -229,30 +228,18 @@ export default function DashboardScreen() {
     }
   }, [isConnected]);
 
-  // ─── Yeni ölçüm gelince backend'e kaydet + banner göster ───
+  // ─── Yeni ML sonucu gelince banner göster ──────────────────
   useEffect(() => {
-    if (!latestResult) return;
+    if (!latestMlResult) return;
+    if (lastShownSessionRef.current === latestMlResult.session_id) return;
+    lastShownSessionRef.current = latestMlResult.session_id;
 
-    // Aynı timestamp'ı iki kez kaydetme
-    if (latestResult.timestamp === lastSavedTsRef.current) return;
-    lastSavedTsRef.current = latestResult.timestamp;
-
-    // Backend'e kaydet (hata olursa sessizce geç)
-    ppgApi.logResult({
-      heart_rate:   latestResult.hr,
-      hrv_rmssd:    latestResult.hrv,
-      stress_score: latestResult.stress_score,
-      stress_level: latestResult.status,
-    }).catch(() => {/* offline veya auth hatası — yoksay */});
-
-    // 4 saniye sonra banner göster
     if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     bannerTimerRef.current = setTimeout(() => {
       setShowBanner(true);
-      // 10 saniye sonra otomatik kapat
       dismissTimerRef.current = setTimeout(() => setShowBanner(false), 10_000);
     }, 4_000);
-  }, [latestResult]);
+  }, [latestMlResult]);
 
   // Banner'ı soran butona basınca Chat'e yönlendir
   const handleBannerAsk = useCallback((message: string) => {
@@ -267,30 +254,6 @@ export default function DashboardScreen() {
     if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
   }, []);
 
-  // ─── ML sonucu polling (live.py → Railway → burada) ────────
-  useEffect(() => {
-    const fetchMlResult = async () => {
-      try {
-        const results = await ppgApi.history(1);
-        if (results && results.length > 0) {
-          const latest = results[0];
-          // Sadece son 30 dakika içindeki sonuçları göster
-          // analyzed_at UTC olduğundan 'Z' suffix ekliyoruz (timezone parse hatası önlenir)
-          const utcStr = latest.analyzed_at.endsWith('Z') ? latest.analyzed_at : latest.analyzed_at + 'Z';
-          const ageMs = Date.now() - new Date(utcStr).getTime();
-          if (ageMs < 30 * 60 * 1000) {
-            setMlResult(latest);
-          }
-        }
-      } catch {
-        // sessizce geç — live.py çalışmıyorsa normal
-      }
-    };
-    fetchMlResult();
-    const interval = setInterval(fetchMlResult, 10_000);
-    return () => clearInterval(interval);
-  }, []);
-
   useEffect(() => {
     return () => {
       if (DemoService.isRunning()) DemoService.stop();
@@ -299,7 +262,9 @@ export default function DashboardScreen() {
     };
   }, []);
 
-  const stressCfg  = latestResult ? STRESS_CONFIG[latestResult.status] : null;
+  // Ana stres göstergesi → ML sonucunu kullan
+  const stressCfg = latestMlResult ? STRESS_CONFIG[latestMlResult.stress_level] : null;
+  const needsBaseline = !!latestResult && !latestMlResult && !mlLoading;
 
   const bleStatusLabel: Record<typeof bleState, string> = {
     disconnected: 'Bağlı Değil',
@@ -368,31 +333,31 @@ export default function DashboardScreen() {
             />
           </View>
 
-          {/* ── ML Model Analizi (live.py çalışınca görünür) ── */}
-          {mlResult && (() => {
-            const cfg = STRESS_CONFIG[mlResult.stress_level];
-            return (
-              <View style={[styles.mlCard, Shadow.sm]}>
-                <View style={styles.mlHeader}>
-                  <Text style={styles.mlTitle}>🧠 ML Model Analizi</Text>
-                  <Text style={styles.mlTime}>
-                    {new Date(mlResult.analyzed_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+          {/* ── ML Detay Kartı (anlık BLE-ML sonucu) ── */}
+          {latestMlResult && latestResult && (
+            <View style={[styles.mlCard, Shadow.sm]}>
+              <View style={styles.mlHeader}>
+                <Text style={styles.mlTitle}>🧠 Railway ML · robust9_z</Text>
+                <Text style={styles.mlTime}>
+                  {new Date(latestMlResult.analyzed_at.endsWith('Z') ? latestMlResult.analyzed_at : latestMlResult.analyzed_at + 'Z')
+                    .toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+              <View style={styles.mlBody}>
+                <View style={[styles.mlBadge, { backgroundColor: STRESS_CONFIG[latestMlResult.stress_level].bgColor }]}>
+                  <Text style={{ fontSize: 18 }}>{STRESS_CONFIG[latestMlResult.stress_level].emoji}</Text>
+                  <Text style={[styles.mlBadgeText, { color: STRESS_CONFIG[latestMlResult.stress_level].gradientStart }]}>
+                    {STRESS_CONFIG[latestMlResult.stress_level].label}
                   </Text>
                 </View>
-                <View style={styles.mlBody}>
-                  <View style={[styles.mlBadge, { backgroundColor: cfg.bgColor }]}>
-                    <Text style={{ fontSize: 18 }}>{cfg.emoji}</Text>
-                    <Text style={[styles.mlBadgeText, { color: cfg.gradientStart }]}>{cfg.label}</Text>
-                  </View>
-                  <View style={styles.mlStats}>
-                    <Text style={styles.mlStat}>Skor: <Text style={{ fontWeight: '700' }}>{mlResult.stress_score}/100</Text></Text>
-                    <Text style={styles.mlStat}>HR: <Text style={{ fontWeight: '700' }}>{mlResult.heart_rate} bpm</Text></Text>
-                    <Text style={styles.mlStat}>HRV: <Text style={{ fontWeight: '700' }}>{mlResult.hrv_rmssd} ms</Text></Text>
-                  </View>
+                <View style={styles.mlStats}>
+                  <Text style={styles.mlStat}>p_stress: <Text style={{ fontWeight: '700' }}>{(latestMlResult.p_stress * 100).toFixed(0)}%</Text></Text>
+                  <Text style={styles.mlStat}>HR: <Text style={{ fontWeight: '700' }}>{latestResult.hr} bpm</Text></Text>
+                  <Text style={styles.mlStat}>HRV: <Text style={{ fontWeight: '700' }}>{latestResult.hrv} ms</Text></Text>
                 </View>
               </View>
-            );
-          })()}
+            </View>
+          )}
 
           {/* ── Geçmiş ── */}
           <HistoryBar history={resultHistory} />

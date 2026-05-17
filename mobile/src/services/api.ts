@@ -204,11 +204,35 @@ export interface PpgSessionSummary {
   analyzed_at: string;
 }
 
+
+export interface BleAnalyzeRequest {
+  hr:      number;
+  rmssd:   number;
+  sdnn:    number;
+  mean_nn: number;
+  motion:  number;
+}
+
+export interface BleAnalyzeResponse {
+  p_stress:          number;
+  stress_level:      'relaxed' | 'moderate' | 'high';
+  stress_score:      number;
+  session_id:        string;
+  analyzed_at:       string;
+  baseline_sessions: number;
+}
+
 export const ppgApi = {
   /**
    * ESP32'den gelen işlenmiş sonucu backend'e kaydeder.
    * Backend ML çalıştırmaz — sadece saklar.
    */
+  analyzeBleMl: (data: BleAnalyzeRequest) =>
+    request<BleAnalyzeResponse>('/ppg/analyze-ble', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   logResult: (data: PpgLogRequest) =>
     request<{ session_id: string; analyzed_at: string }>('/ppg/log', {
       method: 'POST',

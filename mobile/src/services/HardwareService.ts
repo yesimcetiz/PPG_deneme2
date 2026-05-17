@@ -18,6 +18,7 @@
 import { BleManager, Device, Subscription, BleError } from 'react-native-ble-plx';
 import { Platform } from 'react-native';
 import { usePpgStore, SensorResult, StressLevel } from '../store/ppgStore';
+import { ppgApi, ApiError } from './api';
 
 // ─── ESP32 GATT UUID'leri ────────────────────────────────────
 // Firmware'ınızdaki gerçek UUID'lerle değiştirin.
@@ -39,6 +40,43 @@ let reconnectAttempts  = 0;
 let isActive           = false;
 
 // ─── Yardımcı fonksiyonlar ───────────────────────────────────
+
+/**
+ * BLE paketini Railway ML pipeline'ına gönderir.
+ * Baseline yoksa (428) sessizce geçer — kullanıcı uyarısı Dashboard'dan gelir.
+ */
+async function sendToMlPipeline(result: SensorResult): Promise<void> {
+  const store = usePpgStore.getState();
+
+  // Firmware v1 fallback: sdnn/mean_nn yoksa türet
+  const sdnn    = result.sdnn    ?? result.hrv * 1.15;
+  const mean_nn = result.mean_nn ?? (60000 / result.hr);
+  const motion  = result.motion  ?? 0.01;
+
+  store.setMlLoading(true);
+  try {
+    const ml = await ppgApi.analyzeBleMl({
+      hr:      result.hr,
+      rmssd:   result.hrv,
+      sdnn,
+      mean_nn,
+      motion,
+    });
+    store.setMlResult({
+      p_stress:     ml.p_stress,
+      stress_level: ml.stress_level,
+      stress_score: ml.stress_score,
+      session_id:   ml.session_id,
+      analyzed_at:  ml.analyzed_at,
+    });
+  } catch (err) {
+    store.setMlLoading(false);
+    // 428 = baseline yok → sessiz geç (Dashboard zaten uyarır)
+    if (!(err instanceof ApiError && err.status === 428)) {
+      console.warn('[ML Pipeline]', err);
+    }
+  }
+}
 
 function getManager(): BleManager {
   if (!bleManager) bleManager = new BleManager();
