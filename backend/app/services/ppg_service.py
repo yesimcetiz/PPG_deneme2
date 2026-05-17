@@ -6,10 +6,13 @@ proje kökündeki ml_models/ klasöründen yüklenir.
 """
 from pathlib import Path
 from typing import List
+import logging
 import math
 import numpy as np
 import pandas as pd
 import joblib
+
+logger = logging.getLogger(__name__)
 
 MODEL_DIR = Path(__file__).resolve().parents[2] / "ml_models"
 MODEL_PATH = MODEL_DIR / "stress_model_logreg_best.pkl"
@@ -128,12 +131,13 @@ def run_ble_inference(
 ) -> dict:
     """
     ESP32 BLE'den gelen 5 feature ile ML inference çalıştırır.
+    live.py'daki compute_window_feature_row + safe_z mantığıyla birebir uyumludur.
 
     Eksik robust9_z feature'ları normal dağılım varsayımıyla türetilir:
       MedianNN ≈ MeanNN
-      IQRNN    ≈ 1.35 × SDNN
-      MADNN    ≈ 0.80 × SDNN
-      StdHR    ≈ (60000 / MeanNN²) × SDNN × 1000
+      IQRNN    ≈ 1.35 × SDNN   (normal dağılımda IQR/σ = 1.3490)
+      MADNN    ≈ 0.80 × SDNN   (z-norm'da sabit iptal olur, teorik: 0.6745)
+      StdHR    ≈ (60000 / MeanNN²) × SDNN  (delta method — live.py std(60000/RR) ile eşdeğer)
 
     Döner: {p_stress, y_pred_raw, y_pred_smooth, stress_level, stress_score, feature_set}
     """
@@ -177,6 +181,17 @@ def run_ble_inference(
     y_smooth = int(_majority_smooth(history, k=K, m=M)[-1])
 
     level = "high" if p_stress >= 0.65 else "moderate" if p_stress >= 0.35 else "relaxed"
+
+    # ── Debug log (live.py çıktısıyla aynı format) ──────────────
+    logger.info(
+        "[BLE-ML] p=%.3f raw=%d smooth=%d [%s] | "
+        "Ham: HR=%.1f RMSSD=%.1f SDNN=%.1f MeanNN=%.1f motion=%.4f StdHR=%.2f | "
+        "Z: HR_z=%+.2f RMSSD_z=%+.2f SDNN_z=%+.2f MeanNN_z=%+.2f motion_z=%+.2f StdHR_z=%+.2f",
+        p_stress, y_raw, y_smooth, level,
+        hr, rmssd, sdnn, mean_nn, motion, std_hr,
+        feat_z["MeanHR_z"], feat_z["RMSSD_z"], feat_z["SDNN_z"],
+        feat_z["MeanNN_z"], feat_z["motion_z"], feat_z["StdHR_z"],
+    )
 
     return {
         "p_stress":      round(p_stress, 4),
