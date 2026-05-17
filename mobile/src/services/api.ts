@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Her zaman production Railway backend kullanılır.
 // Artık local IP eşleştirmesi gerekmez — laptop kapalıyken de, farklı ağda da çalışır.
@@ -7,15 +7,13 @@ const BASE_URL = 'https://ppgdeneme2-production.up.railway.app';
 const TOKEN_KEY = 'sl_access_token';
 const REFRESH_TOKEN_KEY = 'sl_refresh_token';
 
-// ─── Token helpers (SecureStore — şifreli, jailbreak'e karşı dayanıklı) ──
-// iOS: Keychain, Android: Keystore ile şifreli depolama.
-// AsyncStorage'dan farkı: şifrelenmemiş disk'e yazılmaz.
-export const saveToken = (t: string) => SecureStore.setItemAsync(TOKEN_KEY, t);
-export const getToken = () => SecureStore.getItemAsync(TOKEN_KEY);
-export const clearToken = () => SecureStore.deleteItemAsync(TOKEN_KEY);
-export const saveRefreshToken = (t: string) => SecureStore.setItemAsync(REFRESH_TOKEN_KEY, t);
-export const getRefreshToken = () => SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
-export const clearRefreshToken = () => SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+// ─── Token helpers ────────────────────────────────────────────
+export const saveToken = (t: string) => AsyncStorage.setItem(TOKEN_KEY, t);
+export const getToken = () => AsyncStorage.getItem(TOKEN_KEY);
+export const clearToken = () => AsyncStorage.removeItem(TOKEN_KEY);
+export const saveRefreshToken = (t: string) => AsyncStorage.setItem(REFRESH_TOKEN_KEY, t);
+export const getRefreshToken = () => AsyncStorage.getItem(REFRESH_TOKEN_KEY);
+export const clearRefreshToken = () => AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
 
 // ─── Error class ─────────────────────────────────────────────
 export class ApiError extends Error {
@@ -30,7 +28,7 @@ export class ApiError extends Error {
  * Her API isteğini yönetir.
  *
  * 401 aldığımızda ne olur?
- * 1. Refresh token'ı SecureStore'dan al
+ * 1. Refresh token'ı AsyncStorage'dan al
  * 2. /auth/refresh endpoint'ine gönder
  * 3. Yeni access token'ı kaydet
  * 4. Orijinal isteği YENİ token ile tekrar dene
