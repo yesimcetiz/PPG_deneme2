@@ -143,7 +143,14 @@ def run_ble_inference(
     median_nn = mean_nn
     iqr_nn    = 1.35 * sdnn
     mad_nn    = 0.80 * sdnn
-    std_hr    = (60000.0 / max(mean_nn ** 2, 1.0)) * sdnn * 1000.0
+    # BUG FIX: * 1000.0 kaldırıldı — std_hr bpm cinsinden (~5-15 bpm), ms değil
+    std_hr    = (60000.0 / max(mean_nn ** 2, 1.0)) * sdnn
+
+    # ── StdHR baseline'ı türet (DB'de saklanmıyor, SDNN/MeanNN'den hesapla) ──
+    # live.py'daki StdHR = std(60000/RR) ≈ (60000/MeanNN²) × SDNN ile tutarlı
+    _nn2 = max((bl_mean_nn_mean or 780.0) ** 2, 1.0)
+    bl_std_hr_mean = (60000.0 / _nn2) * (bl_sdnn_mean or 50.0)
+    bl_std_hr_std  = max((60000.0 / _nn2) * (bl_sdnn_std  or 10.0), 1e-6)
 
     # ── Z-normalize ──────────────────────────────────────────
     feat_z = {
@@ -154,7 +161,7 @@ def run_ble_inference(
         "IQRNN_z":      _safe_z(iqr_nn,    (bl_sdnn_mean or 0.0) * 1.35,  (bl_sdnn_std or 1.0) * 1.35),
         "MADNN_z":      _safe_z(mad_nn,    (bl_sdnn_mean or 0.0) * 0.80,  (bl_sdnn_std or 1.0) * 0.80),
         "MeanHR_z":     _safe_z(hr,        bl_mean_hr_mean,               bl_mean_hr_std),
-        "StdHR_z":      _safe_z(std_hr,    0.0,                           1.0),
+        "StdHR_z":      _safe_z(std_hr,    bl_std_hr_mean,                bl_std_hr_std),
         "motion_z":     _safe_z(motion,    bl_motion_mean,                bl_motion_std),
         "LF_power_log": 0.0,
         "HF_power_log": 0.0,
