@@ -52,6 +52,9 @@
     "typescript": "~5.9.2"
   },
   "private": true,
+  "overrides": {
+    "@sentry/cli-linux-arm64": "2.55.0"
+  },
   "expo": {
     "install": {
       "exclude": [
