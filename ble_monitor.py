@@ -5,7 +5,14 @@ BLE ML Monitor
 ESP32 → BLE → Telefon → Railway ML pipeline çıktılarını
 yerel log dosyasına yazar.
 
-Kullanım:
+Kullanım (önerilen — şifre shell history'ye girmez):
+  1. Proje kökünde .env.monitor dosyası oluştur:
+       BLE_EMAIL=yesimcetiz@gmail.com
+       BLE_PASSWORD=sifreniz
+  2. Çalıştır:
+       python ble_monitor.py
+
+Alternatif (eski yöntem, hâlâ çalışır):
   python ble_monitor.py --email <email> --password <sifre>
 
 Seçenekler:
@@ -17,6 +24,7 @@ Seçenekler:
 """
 
 import argparse
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -26,6 +34,16 @@ try:
     import requests
 except ImportError:
     sys.exit("❌ 'requests' paketi bulunamadı. Çalıştır: pip install requests")
+
+# ─── .env.monitor yükle (varsa) ──────────────────────────────
+_env_file = Path(__file__).parent / ".env.monitor"
+if _env_file.exists():
+    with _env_file.open() as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _key, _, _val = _line.partition("=")
+                os.environ.setdefault(_key.strip(), _val.strip())
 
 BASE_URL = "https://ppgdeneme2-production.up.railway.app"
 
@@ -83,15 +101,28 @@ def format_line(entry: dict) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="BLE ML Monitor — Railway log takibi")
-    parser.add_argument("--email",    required=True,  help="Railway backend kullanıcı e-postası")
-    parser.add_argument("--password", required=True,  help="Şifre")
-    parser.add_argument("--interval", type=int, default=5,                  help="Polling aralığı (saniye)")
-    parser.add_argument("--output",   default="ble_ml_detail.log",          help="Çıktı log dosyası")
+    parser.add_argument("--email",    default=None, help="E-posta (.env.monitor'dan da okunur)")
+    parser.add_argument("--password", default=None, help="Şifre  (.env.monitor'dan da okunur)")
+    parser.add_argument("--interval", type=int, default=5,               help="Polling aralığı (saniye)")
+    parser.add_argument("--output",   default="ble_ml_detail.log",       help="Çıktı log dosyası")
     args = parser.parse_args()
+
+    # Öncelik sırası: --arg > .env.monitor > hata
+    email    = args.email    or os.environ.get("BLE_EMAIL")
+    password = args.password or os.environ.get("BLE_PASSWORD")
+
+    if not email or not password:
+        sys.exit(
+            "❌ E-posta ve şifre gerekli.\n"
+            "   Seçenek 1 (önerilen): Proje kökünde .env.monitor oluştur:\n"
+            "     BLE_EMAIL=yesimcetiz@gmail.com\n"
+            "     BLE_PASSWORD=sifreniz\n"
+            "   Seçenek 2: python ble_monitor.py --email <e> --password <p>"
+        )
 
     log_path = Path(args.output)
 
-    print(f"🔐 Giriş yapılıyor: {args.email}")
+    print(f"🔐 Giriş yapılıyor: {email}")
     try:
         token = login(args.email, args.password)
     except Exception as e:
@@ -127,7 +158,7 @@ def main():
                 if e.response is not None and e.response.status_code == 401:
                     # Token süresi doldu — yeniden giriş
                     try:
-                        token = login(args.email, args.password)
+                        token = login(email, password)
                     except Exception as re_err:
                         print(f"[WARN] Yeniden giriş başarısız: {re_err}")
                 else:

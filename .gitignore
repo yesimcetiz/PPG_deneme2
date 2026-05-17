@@ -21,6 +21,9 @@ node_modules/
 mobile/.expo/
 mobile/dist/
 
+# BLE Monitor kimlik bilgileri — asla commit edilmez
+.env.monitor
+
 # Çalışma logları — git'te tutulmaz
 live_error.log
 live_output.log
