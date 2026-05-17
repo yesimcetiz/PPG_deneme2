@@ -562,24 +562,6 @@ try:
                 save_baseline_cache(LIVE_EMAIL, base_means, base_stds, n_sessions)
                 # ────────────────────────────────────────────
 
-                # ── Cache ile blend: önceki oturumların bilgisini koru ──
-                if _cached_baseline is not None:
-                    cached_means, cached_stds, n_prev = _cached_baseline
-                    w = BASELINE_CACHE_BLEND_WEIGHT
-                    # Sadece ortak kolonlar için blend
-                    common = [c for c in base_feature_cols if c in cached_means.index]
-                    if common:
-                        base_means[common] = w * cached_means[common] + (1 - w) * base_means[common]
-                        base_stds[common]  = w * cached_stds[common]  + (1 - w) * base_stds[common]
-                        base_stds = base_stds.clip(lower=1e-6)
-                        print(f"[Cache] Kişisel norm ile blend edildi (ağırlık={w}).")
-                    n_sessions = n_prev + 1
-                else:
-                    n_sessions = 1
-
-                # Bu oturumun baseline'ını cache'e kaydet (blend edilmiş hali)
-                save_baseline_cache(LIVE_EMAIL, base_means, base_stds, n_sessions)
-
                 baseline_done = True
                 _log(f"Baseline ready. Valid baseline windows: {len(baseline_feature_rows)}")
                 _log("── Baseline means ──────────────────────────────────────")

@@ -70,11 +70,20 @@ async function sendToMlPipeline(result: SensorResult): Promise<void> {
       analyzed_at:  ml.analyzed_at,
     });
   } catch (err) {
-    store.setMlLoading(false);
-    // 428 = baseline yok → sessiz geç (Dashboard zaten uyarır)
-    if (!(err instanceof ApiError && err.status === 428)) {
-      console.warn('[ML Pipeline]', err);
+    if (err instanceof ApiError) {
+      if (err.status === 428) {
+        // Baseline yok → store'a işaretle, Dashboard doğru mesajı gösterir
+        store.setMlError('no_baseline');
+      } else {
+        // Diğer backend hataları (422 model yüklenemedi, 500 vb.)
+        store.setMlError('backend_error');
+        console.warn('[ML Pipeline] Backend hatası:', err.status, err.detail);
+      }
+    } else {
+      store.setMlError('network_error');
+      console.warn('[ML Pipeline] Ağ hatası:', err);
     }
+    store.setMlLoading(false);
   }
 }
 

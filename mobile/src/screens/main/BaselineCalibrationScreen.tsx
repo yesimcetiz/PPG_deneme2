@@ -98,7 +98,7 @@ export default function BaselineCalibrationScreen() {
   const [errorMsg,       setErrorMsg]       = useState('');
   const [nSessionsAfter, setNSessionsAfter] = useState<number | null>(null);
 
-  const startHistoryLen = useRef(0);
+  const startTimestamp  = useRef(0);
   const timerRef        = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isConnected = bleState === 'connected';
@@ -108,7 +108,7 @@ export default function BaselineCalibrationScreen() {
       Alert.alert('Bağlantı Gerekli', 'Lütfen önce ESP32 sensörüne bağlanın.');
       return;
     }
-    startHistoryLen.current = resultHistory.length;
+    startTimestamp.current = Date.now();
     setPhase('counting');
     setSecondsLeft(CALIBRATION_DURATION_S);
     setSampleCount(0);
@@ -123,12 +123,13 @@ export default function BaselineCalibrationScreen() {
         return prev - 1;
       });
     }, 1000);
-  }, [isConnected, resultHistory.length]);
+  }, [isConnected]);
 
   // Canlı sample sayısı
   useEffect(() => {
     if (phase === 'counting') {
-      setSampleCount(Math.max(0, resultHistory.length - startHistoryLen.current));
+      const count = resultHistory.filter(s => s.timestamp >= startTimestamp.current).length;
+      setSampleCount(count);
     }
   }, [resultHistory.length, phase]);
 
@@ -136,7 +137,7 @@ export default function BaselineCalibrationScreen() {
   useEffect(() => {
     if (phase !== 'calculating') return;
 
-    const samples = resultHistory.slice(startHistoryLen.current);
+    const samples = resultHistory.filter(s => s.timestamp >= startTimestamp.current);
 
     if (samples.length < MIN_SAMPLES) {
       setErrorMsg(

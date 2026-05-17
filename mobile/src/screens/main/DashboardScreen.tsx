@@ -186,7 +186,7 @@ export default function DashboardScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const user = useAuthStore((s) => s.user);
-  const { bleState, connectedDeviceName, latestResult, resultHistory, latestMlResult, mlLoading } = usePpgStore();
+  const { bleState, connectedDeviceName, latestResult, resultHistory, latestMlResult, mlLoading, mlError } = usePpgStore();
 
   const [isDemoRunning, setIsDemoRunning] = useState(false);
   const [isConnecting,  setIsConnecting]  = useState(false);
@@ -263,8 +263,10 @@ export default function DashboardScreen() {
   }, []);
 
   // Ana stres göstergesi → ML sonucunu kullan
-  const stressCfg = latestMlResult ? STRESS_CONFIG[latestMlResult.stress_level] : null;
-  const needsBaseline = !!latestResult && !latestMlResult && !mlLoading;
+  const stressCfg    = latestMlResult ? STRESS_CONFIG[latestMlResult.stress_level] : null;
+  const needsBaseline  = !!latestResult && !latestMlResult && !mlLoading && mlError === 'no_baseline';
+  const hasBackendError = !!latestResult && !latestMlResult && !mlLoading && mlError === 'backend_error';
+  const hasNetworkError = !!latestResult && !latestMlResult && !mlLoading && mlError === 'network_error';
 
   const bleStatusLabel: Record<typeof bleState, string> = {
     disconnected: 'Bağlı Değil',
@@ -316,6 +318,20 @@ export default function DashboardScreen() {
               <Ionicons name="analytics-outline" size={36} color="#F59E0B" />
               <Text style={styles.placeholderText}>
                 {'Kişisel baseline gerekli.\nProfil → Baseline Kalibrasyonu yapın.'}
+              </Text>
+            </View>
+          ) : hasBackendError ? (
+            <View style={[styles.stressPlaceholder, Shadow.sm]}>
+              <Ionicons name="cloud-offline-outline" size={36} color={Colors.error} />
+              <Text style={styles.placeholderText}>
+                {'Sunucu hatası oluştu.\nBir sonraki ölçümde otomatik tekrar denenecek.'}
+              </Text>
+            </View>
+          ) : hasNetworkError ? (
+            <View style={[styles.stressPlaceholder, Shadow.sm]}>
+              <Ionicons name="wifi-outline" size={36} color={Colors.error} />
+              <Text style={styles.placeholderText}>
+                {'İnternet bağlantısı yok.\nBağlantı sağlandığında otomatik devam eder.'}
               </Text>
             </View>
           ) : (

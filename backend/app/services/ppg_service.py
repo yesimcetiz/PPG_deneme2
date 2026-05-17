@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import joblib
 
-MODEL_DIR = Path(__file__).resolve().parents[3] / "ml_models"
+MODEL_DIR = Path(__file__).resolve().parents[2] / "ml_models"
 MODEL_PATH = MODEL_DIR / "stress_model_logreg_best.pkl"
 SEARCH_PATH = MODEL_DIR / "LOSO_model_search_results.csv"
 

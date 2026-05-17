@@ -3,6 +3,7 @@ import { create } from 'zustand';
 // ─── Tipler ──────────────────────────────────────────────────
 
 export type StressLevel = 'relaxed' | 'moderate' | 'high';
+export type MlErrorType = 'no_baseline' | 'backend_error' | 'network_error' | null;
 export type BleConnectionState =
   | 'disconnected'
   | 'scanning'
@@ -38,6 +39,7 @@ export interface PpgState {
   latestResult: SensorResult | null;
   latestMlResult: MlResult | null;
   mlLoading: boolean;
+  mlError: MlErrorType;
   resultHistory: SensorResult[];
 
   setBleState: (state: BleConnectionState) => void;
@@ -45,6 +47,7 @@ export interface PpgState {
   pushResult: (result: SensorResult) => void;
   setMlResult: (result: MlResult | null) => void;
   setMlLoading: (loading: boolean) => void;
+  setMlError: (error: MlErrorType) => void;
   resetSession: () => void;
 }
 
@@ -57,6 +60,7 @@ export const usePpgStore = create<PpgState>((set) => ({
   latestResult: null,
   latestMlResult: null,
   mlLoading: false,
+  mlError: null,
   resultHistory: [],
 
   setBleState: (state) => set({ bleState: state }),
@@ -75,14 +79,16 @@ export const usePpgStore = create<PpgState>((set) => ({
       };
     }),
 
-  setMlResult:  (result)  => set({ latestMlResult: result, mlLoading: false }),
+  setMlResult:  (result)  => set({ latestMlResult: result, mlLoading: false, mlError: null }),
   setMlLoading: (loading) => set({ mlLoading: loading }),
+  setMlError:   (error)   => set({ mlError: error, mlLoading: false }),
 
   resetSession: () =>
     set({
       latestResult: null,
       latestMlResult: null,
       mlLoading: false,
+      mlError: null,
       resultHistory: [],
     }),
 }));
