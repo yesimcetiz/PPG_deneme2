@@ -94,31 +94,45 @@ function StressGauge({ score, config }: { score: number; config: StressConfig })
 
 // ─── Geçmiş mini grafik ──────────────────────────────────────
 
-function HistoryBar({ history }: { history: SensorResult[] }) {
-  if (history.length < 2) return null;
+const HISTORY_DISPLAY = 7;
 
+function HistoryBar({ history }: { history: SensorResult[] }) {
+  // Placeholder olarak her zaman 7 slot göster; gelen ölçümler sağdan dolar
   const colorMap: Record<StressLevel, string> = {
     relaxed: Colors.success,
     moderate: '#F59E0B',
     high: Colors.error,
   };
 
+  const recent = history.slice(-HISTORY_DISPLAY);
+  // Soldan boş slotlar ekle ki barlar sağdan dolsun
+  const slots: (SensorResult | null)[] = [
+    ...Array(HISTORY_DISPLAY - recent.length).fill(null),
+    ...recent,
+  ];
+
   return (
     <View style={[styles.historyCard, Shadow.sm]}>
-      <Text style={styles.historyTitle}>Son {history.length} Ölçüm</Text>
+      <Text style={styles.historyTitle}>Son 7 Ölçüm</Text>
       <View style={styles.historyBars}>
-        {history.map((r, i) => (
+        {slots.map((r, i) => (
           <View key={i} style={styles.historyBarWrap}>
-            <View
-              style={[
-                styles.historyBarFill,
-                {
-                  height: `${r.stress_score}%`,
-                  backgroundColor: colorMap[r.status],
-                  opacity: 0.3 + (i / history.length) * 0.7,
-                },
-              ]}
-            />
+            {r ? (
+              <View
+                style={[
+                  styles.historyBarFill,
+                  {
+                    // Minimum %10 yükseklik — düşük skor da görünür olsun
+                    height: `${Math.max(r.stress_score, 10)}%`,
+                    backgroundColor: colorMap[r.status],
+                    opacity: 0.35 + (i / HISTORY_DISPLAY) * 0.65,
+                  },
+                ]}
+              />
+            ) : (
+              // Boş slot — ince gri çizgi
+              <View style={styles.historyBarEmpty} />
+            )}
           </View>
         ))}
       </View>
@@ -365,7 +379,7 @@ export default function DashboardScreen() {
           {latestMlResult && latestResult && (
             <View style={[styles.mlCard, Shadow.sm]}>
               <View style={styles.mlHeader}>
-                <Text style={styles.mlTitle}>🧠 Railway ML · robust9_z</Text>
+                <Text style={styles.mlTitle}>🧠 Stres Analizi · Model Çıktısı</Text>
                 <Text style={styles.mlTime}>
                   {new Date(latestMlResult.analyzed_at.endsWith('Z') ? latestMlResult.analyzed_at : latestMlResult.analyzed_at + 'Z')
                     .toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
@@ -379,7 +393,7 @@ export default function DashboardScreen() {
                   </Text>
                 </View>
                 <View style={styles.mlStats}>
-                  <Text style={styles.mlStat}>p_stress: <Text style={{ fontWeight: '700' }}>{(latestMlResult.p_stress * 100).toFixed(0)}%</Text></Text>
+                  <Text style={styles.mlStat}>Stres Seviyesi: <Text style={{ fontWeight: '700' }}>{(latestMlResult.p_stress * 100).toFixed(0)}%</Text></Text>
                   <Text style={styles.mlStat}>HR: <Text style={{ fontWeight: '700' }}>{latestResult.hr} bpm</Text></Text>
                   <Text style={styles.mlStat}>HRV: <Text style={{ fontWeight: '700' }}>{latestResult.hrv} ms</Text></Text>
                 </View>
@@ -490,8 +504,9 @@ const styles = StyleSheet.create({
   },
   historyTitle: { fontSize: FontSize.xs, fontWeight: '600', color: Colors.textMuted, marginBottom: Spacing.sm },
   historyBars:  { flexDirection: 'row', alignItems: 'flex-end', height: 48, gap: 3 },
-  historyBarWrap: { flex: 1, height: '100%', justifyContent: 'flex-end' },
-  historyBarFill: { borderRadius: 3, width: '100%' },
+  historyBarWrap:  { flex: 1, height: '100%', justifyContent: 'flex-end' },
+  historyBarFill:  { borderRadius: 3, width: '100%' },
+  historyBarEmpty: { borderRadius: 3, width: '100%', height: 3, backgroundColor: Colors.border },
 
   // Demo butonu
   demoBtn: {
