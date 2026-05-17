@@ -159,25 +159,36 @@ function handleDisconnect(shouldReconnect = true) {
 }
 
 async function subscribeToResults(device: Device) {
+  console.log('[BLE] discoverAllServicesAndCharacteristics başlıyor...');
   await device.discoverAllServicesAndCharacteristics();
+  console.log('[BLE] Servisler keşfedildi. Notification subscription kuruluyor...');
 
   notifySub = device.monitorCharacteristicForService(
     STRESS_SERVICE_UUID,
     STRESS_CHAR_UUID,
     (error: BleError | null, characteristic) => {
       if (error) {
+        console.error('[BLE] Notification hatası — bağlantı kesiliyor:', error.message, 'errorCode:', error.errorCode);
         handleDisconnect();
         return;
       }
-      if (!characteristic?.value) return;
+      if (!characteristic?.value) {
+        console.warn('[BLE] Boş karakteristik değeri geldi, atlanıyor.');
+        return;
+      }
 
+      console.log('[BLE] Paket alındı, parse ediliyor...');
       const result = parseCharacteristicValue(characteristic.value);
       if (result) {
+        console.log(`[BLE] Parse OK → HR=${result.hr} HRV=${result.hrv} score=${result.stress_score}`);
         usePpgStore.getState().pushResult(result);
         sendToMlPipeline(result);
+      } else {
+        console.warn('[BLE] Parse başarısız — JSON formatı hatalı veya zorunlu alan eksik.');
       }
     },
   );
+  console.log('[BLE] Notification subscription kuruldu ✓');
 }
 
 // ─── Public API ──────────────────────────────────────────────
@@ -230,19 +241,24 @@ const HardwareService = {
     const store   = usePpgStore.getState();
 
     store.setBleState('connecting');
+    console.log(`[BLE] Bağlanılıyor: ${deviceId} | Platform: ${Platform.OS}`);
 
     const device = await manager.connectToDevice(deviceId, {
       autoConnect: false,
-      requestMTU: Platform.OS === 'android' ? 185 : undefined, // JSON için yeterli MTU
+      requestMTU: Platform.OS === 'android' ? 185 : undefined,
     });
 
+    console.log(`[BLE] Bağlandı: id=${device.id} name=${device.name ?? device.localName ?? '?'}`);
     connectedDevice = device;
     store.setConnectedDevice(device.id, device.name ?? device.localName ?? 'Stress Sensor');
     store.setBleState('connected');
     store.resetSession();
 
     await subscribeToResults(device);
-    device.onDisconnected(() => handleDisconnect(true));
+    device.onDisconnected(() => {
+      console.warn('[BLE] Cihaz bağlantısı kesildi — yeniden bağlanılacak.');
+      handleDisconnect(true);
+    });
   },
 
   async disconnect(): Promise<void> {
